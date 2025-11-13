@@ -50,26 +50,17 @@ pip install -r requirements.txt
 From the project root directory:
 
 ```bash
-# Method 1: Using the module
-python -m potahunter.main
-
-# Method 2: Direct execution
-cd src
-python -m potahunter.main
+python run.py
 ```
 
-Or create a launcher script:
+If you're using a virtual environment:
 
-**Windows** (`run.bat`):
-```batch
-@echo off
-venv\Scripts\python.exe src\potahunter\main.py
-```
-
-**macOS/Linux** (`run.sh`):
 ```bash
-#!/bin/bash
-./venv/bin/python src/potahunter/main.py
+# On Windows:
+venv\Scripts\python.exe run.py
+
+# On macOS/Linux:
+./venv/bin/python run.py
 ```
 
 ## Usage
