@@ -1,0 +1,22 @@
+# GUI Framework
+PySide6>=6.6.0
+
+# macOS Integration (for proper menu bar name on macOS)
+pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'
+
+# HTTP Requests
+requests>=2.31.0
+
+# ADIF File Handling
+adif-io>=0.2.0
+
+# Grid Square Calculations
+maidenhead>=1.7.0
+
+# Data Handling
+pandas>=2.1.0
+
+# Development Dependencies
+pytest>=7.4.0
+black>=23.0.0
+pylint>=3.0.0
