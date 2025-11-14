@@ -4,7 +4,7 @@ Settings dialog for POTA Hunter application
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit,
-    QPushButton, QHBoxLayout, QLabel, QTabWidget, QWidget
+    QPushButton, QHBoxLayout, QLabel, QTabWidget, QWidget, QCheckBox
 )
 from PySide6.QtCore import Qt
 
@@ -42,6 +42,10 @@ class SettingsDialog(QDialog):
         qrz_layout.addWidget(info_label)
         qrz_layout.addSpacing(10)
 
+        # XML API credentials (for callsign lookups)
+        xml_header = QLabel("<b>XML API Credentials (for callsign lookups)</b>")
+        qrz_layout.addWidget(xml_header)
+
         self.qrz_username = QLineEdit()
         self.qrz_username.setPlaceholderText("Your QRZ.com username")
         qrz_form.addRow("QRZ Username:", self.qrz_username)
@@ -51,7 +55,43 @@ class SettingsDialog(QDialog):
         self.qrz_password.setEchoMode(QLineEdit.Password)
         qrz_form.addRow("QRZ Password:", self.qrz_password)
 
+        qrz_layout.addSpacing(20)
+
+        # Logbook API key (for log uploads)
+        logbook_header = QLabel("<b>Logbook API Key (for log uploads)</b>")
+        qrz_layout.addWidget(logbook_header)
+
+        logbook_info = QLabel(
+            "Enter your QRZ Logbook API key to enable log uploads.\n"
+            "Get your API key from: https://logbook.qrz.com/api"
+        )
+        logbook_info.setWordWrap(True)
+        logbook_info.setStyleSheet("font-style: italic; color: gray;")
+        qrz_layout.addWidget(logbook_info)
+
+        self.qrz_api_key = QLineEdit()
+        self.qrz_api_key.setPlaceholderText("XXXX-XXXX-XXXX-XXXX")
+        qrz_form.addRow("API Key:", self.qrz_api_key)
+
         qrz_layout.addLayout(qrz_form)
+
+        # Auto-upload checkbox
+        self.auto_upload_checkbox = QCheckBox("Automatically upload QSOs to QRZ Logbook when saving")
+        self.auto_upload_checkbox.setEnabled(False)  # Disabled until API key is set
+        qrz_layout.addWidget(self.auto_upload_checkbox)
+
+        # Enable/disable auto-upload based on API key
+        self.qrz_api_key.textChanged.connect(self._update_auto_upload_enabled)
+
+        qrz_layout.addSpacing(10)
+
+        auto_upload_note = QLabel(
+            "Note: Auto-upload requires a valid API key. "
+            "Enter your API key above to enable this option."
+        )
+        auto_upload_note.setWordWrap(True)
+        auto_upload_note.setStyleSheet("font-style: italic; color: gray; font-size: 11px;")
+        qrz_layout.addWidget(auto_upload_note)
 
         # Add test button
         test_button_layout = QHBoxLayout()
@@ -117,6 +157,50 @@ class SettingsDialog(QDialog):
         """
         self.qrz_username.setText(username)
         self.qrz_password.setText(password)
+
+    def get_qrz_api_key(self):
+        """
+        Get QRZ Logbook API key from the dialog
+
+        Returns:
+            API key string
+        """
+        return self.qrz_api_key.text().strip()
+
+    def set_qrz_api_key(self, api_key):
+        """
+        Set QRZ Logbook API key in the dialog
+
+        Args:
+            api_key: QRZ Logbook API key
+        """
+        self.qrz_api_key.setText(api_key)
+
+    def get_auto_upload_enabled(self):
+        """
+        Get auto-upload setting
+
+        Returns:
+            True if auto-upload is enabled, False otherwise
+        """
+        return self.auto_upload_checkbox.isChecked()
+
+    def set_auto_upload_enabled(self, enabled):
+        """
+        Set auto-upload setting
+
+        Args:
+            enabled: True to enable auto-upload, False to disable
+        """
+        self.auto_upload_checkbox.setChecked(enabled)
+
+    def _update_auto_upload_enabled(self):
+        """Enable/disable auto-upload checkbox based on API key presence"""
+        has_api_key = len(self.qrz_api_key.text().strip()) > 0
+        self.auto_upload_checkbox.setEnabled(has_api_key)
+        if not has_api_key:
+            self.auto_upload_checkbox.setChecked(False)
+
     def test_qrz_credentials(self):
         """Test QRZ credentials by attempting authentication"""
         from potahunter.services.qrz_api import QRZAPIService

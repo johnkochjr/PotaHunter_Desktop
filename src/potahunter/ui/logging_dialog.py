@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QLabel, QMessageBox,
     QComboBox, QTextEdit
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from datetime import datetime
 
 from potahunter.models.qso import QSO
@@ -24,6 +24,7 @@ class LoggingDialog(QDialog):
         super().__init__(parent)
         self.spot_data = spot_data
         self.db_manager = DatabaseManager()
+        self.settings = QSettings()
         self.init_ui()
         self.prefill_data()
 
@@ -223,11 +224,34 @@ class LoggingDialog(QDialog):
 
             # Save to database
             qso_id = self.db_manager.add_qso(qso)
+            qso.id = qso_id
+
+            # Check if auto-upload is enabled
+            auto_upload = self.settings.value("qrz/auto_upload", False, type=bool)
+            api_key = self.settings.value("qrz/api_key", "")
+
+            upload_message = ""
+            if auto_upload and api_key:
+                try:
+                    from potahunter.services.qrz_upload import QRZUploadService
+                    upload_service = QRZUploadService(api_key)
+                    result = upload_service.upload_qso(qso)
+
+                    if result['success']:
+                        # Mark as uploaded in database
+                        qso.qrz_uploaded = True
+                        qso.qrz_upload_date = datetime.utcnow().strftime("%Y%m%d %H%M%S")
+                        self.db_manager.update_qso(qso)
+                        upload_message = "\n\nUploaded to QRZ Logbook successfully!"
+                    else:
+                        upload_message = f"\n\nQRZ Upload failed: {result['message']}"
+                except Exception as e:
+                    upload_message = f"\n\nQRZ Upload error: {str(e)}"
 
             QMessageBox.information(
                 self,
                 "QSO Saved",
-                f"Contact with {qso.callsign} saved successfully!"
+                f"Contact with {qso.callsign} saved successfully!{upload_message}"
             )
 
             self.accept()

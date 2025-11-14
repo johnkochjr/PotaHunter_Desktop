@@ -58,6 +58,8 @@ class DatabaseManager:
                 my_sig_info TEXT,
                 sig TEXT,
                 sig_info TEXT,
+                qrz_uploaded INTEGER DEFAULT 0,
+                qrz_upload_date TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -72,6 +74,27 @@ class DatabaseManager:
             CREATE INDEX IF NOT EXISTS idx_park
             ON qsos(park_reference)
         ''')
+
+        conn.commit()
+        conn.close()
+
+        # Migrate existing database if needed
+        self._migrate_database()
+
+    def _migrate_database(self):
+        """Migrate database schema for new features"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Check if qrz_uploaded column exists
+        cursor.execute("PRAGMA table_info(qsos)")
+        columns = [column[1] for column in cursor.fetchall()]
+
+        if 'qrz_uploaded' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN qrz_uploaded INTEGER DEFAULT 0')
+
+        if 'qrz_upload_date' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN qrz_upload_date TEXT')
 
         conn.commit()
         conn.close()
@@ -94,14 +117,15 @@ class DatabaseManager:
                 callsign, frequency, mode, qso_date, time_on, time_off,
                 rst_sent, rst_rcvd, park_reference, gridsquare, name,
                 comment, qth, state, country, band, my_gridsquare,
-                my_sig, my_sig_info, sig, sig_info
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                my_sig, my_sig_info, sig, sig_info, qrz_uploaded, qrz_upload_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             qso.callsign, qso.frequency, qso.mode, qso.qso_date, qso.time_on,
             qso.time_off, qso.rst_sent, qso.rst_rcvd, qso.park_reference,
             qso.gridsquare, qso.name, qso.comment, qso.qth, qso.state,
             qso.country, qso.band, qso.my_gridsquare, qso.my_sig,
-            qso.my_sig_info, qso.sig, qso.sig_info
+            qso.my_sig_info, qso.sig, qso.sig_info,
+            1 if qso.qrz_uploaded else 0, qso.qrz_upload_date
         ))
 
         qso_id = cursor.lastrowid
@@ -149,7 +173,9 @@ class DatabaseManager:
                 my_sig_info=row['my_sig_info'],
                 sig=row['sig'],
                 sig_info=row['sig_info'],
-                id=row['id']
+                id=row['id'],
+                qrz_uploaded=bool(row['qrz_uploaded']) if 'qrz_uploaded' in row.keys() else False,
+                qrz_upload_date=row['qrz_upload_date'] if 'qrz_upload_date' in row.keys() else None
             )
             qsos.append(qso)
 
@@ -247,14 +273,17 @@ class DatabaseManager:
                 my_sig = ?,
                 my_sig_info = ?,
                 sig = ?,
-                sig_info = ?
+                sig_info = ?,
+                qrz_uploaded = ?,
+                qrz_upload_date = ?
             WHERE id = ?
         ''', (
             qso.callsign, qso.frequency, qso.mode, qso.qso_date, qso.time_on,
             qso.time_off, qso.rst_sent, qso.rst_rcvd, qso.park_reference,
             qso.gridsquare, qso.name, qso.comment, qso.qth, qso.state,
             qso.country, qso.band, qso.my_gridsquare, qso.my_sig,
-            qso.my_sig_info, qso.sig, qso.sig_info, qso.id
+            qso.my_sig_info, qso.sig, qso.sig_info,
+            1 if qso.qrz_uploaded else 0, qso.qrz_upload_date, qso.id
         ))
 
         updated = cursor.rowcount > 0
@@ -336,5 +365,7 @@ class DatabaseManager:
             my_sig_info=row['my_sig_info'],
             sig=row['sig'],
             sig_info=row['sig_info'],
-            id=row['id']
+            id=row['id'],
+            qrz_uploaded=bool(row['qrz_uploaded']) if 'qrz_uploaded' in row.keys() else False,
+            qrz_upload_date=row['qrz_upload_date'] if 'qrz_upload_date' in row.keys() else None
         )

@@ -33,6 +33,8 @@ class QSO:
     sig: Optional[str] = None
     sig_info: Optional[str] = None
     id: Optional[int] = None
+    qrz_uploaded: bool = False
+    qrz_upload_date: Optional[str] = None
 
     @staticmethod
     def from_spot_data(spot_data: dict, additional_data: dict = None) -> 'QSO':

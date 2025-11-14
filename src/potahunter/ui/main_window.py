@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QStatusBar, QMenuBar, QMenu, QComboBox, QLabel, QCheckBox,
-    QTextEdit, QGroupBox, QSplitter, QSizePolicy, QScrollArea
+    QTextEdit, QGroupBox, QSplitter, QSizePolicy, QScrollArea, QFileDialog, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer, QUrl, QSettings, QByteArray
 from PySide6.QtGui import QAction, QColor, QBrush, QDesktopServices, QPixmap
@@ -17,6 +17,8 @@ from potahunter.services.qrz_api import QRZAPIService
 from potahunter.ui.logging_dialog import LoggingDialog
 from potahunter.ui.settings_dialog import SettingsDialog
 from potahunter.ui.logbook_viewer import LogbookViewer
+from potahunter.models.database import DatabaseManager
+from potahunter.utils.adif_export import ADIFExporter
 
 class MainWindow(QMainWindow):
     """Main application window displaying POTA spots"""
@@ -125,7 +127,7 @@ class MainWindow(QMainWindow):
         self.export_button.clicked.connect(self.export_log)
         button_layout.addWidget(self.export_button)
 
-        self.upload_button = QPushButton("Upload to QRZ/LoTW")
+        self.upload_button = QPushButton("Upload to QRZ Logbook")
         self.upload_button.clicked.connect(self.upload_log)
         button_layout.addWidget(self.upload_button)
 
@@ -249,7 +251,7 @@ class MainWindow(QMainWindow):
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")
 
-        upload_action = QAction("&Upload to QRZ/LoTW", self)
+        upload_action = QAction("&Upload to QRZ Logbook", self)
         upload_action.triggered.connect(self.upload_log)
         tools_menu.addAction(upload_action)
 
@@ -434,13 +436,107 @@ class MainWindow(QMainWindow):
 
     def export_log(self):
         """Export log to ADIF file"""
-        self.status_bar.showMessage("Export functionality coming soon...", 3000)
-        # TODO: Implement ADIF export
+        # Get all QSOs from database
+        db_manager = DatabaseManager()
+        qsos = db_manager.get_all_qsos()
+
+        if not qsos:
+            QMessageBox.information(
+                self,
+                "No QSOs",
+                "There are no QSOs in your logbook to export.\n\n"
+                "Log some contacts first, then try exporting again."
+            )
+            return
+
+        # Generate default filename with current date
+        from datetime import datetime
+        default_filename = f"potahunter_log_{datetime.now().strftime('%Y%m%d')}.adi"
+
+        # Open file dialog
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Log to ADIF",
+            default_filename,
+            "ADIF Files (*.adi *.adif);;All Files (*)"
+        )
+
+        if not filename:
+            # User cancelled
+            return
+
+        # Ensure proper extension
+        filename = ADIFExporter.validate_adif_filename(filename)
+
+        # Export to file
+        self.status_bar.showMessage("Exporting log...", 0)
+        try:
+            success = ADIFExporter.export_to_file(qsos, filename)
+
+            if success:
+                QMessageBox.information(
+                    self,
+                    "Export Successful",
+                    f"Successfully exported {len(qsos)} QSO(s) to:\n\n{filename}\n\n"
+                    f"You can now import this file into other logging software "
+                    f"or upload it to QRZ Logbook or LoTW."
+                )
+                self.status_bar.showMessage(f"Exported {len(qsos)} QSOs to {filename}", 5000)
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Export Failed",
+                    f"Failed to export log to {filename}.\n\n"
+                    f"Please check the file path and permissions."
+                )
+                self.status_bar.showMessage("Export failed", 5000)
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Export Error",
+                f"An error occurred while exporting:\n\n{str(e)}"
+            )
+            self.status_bar.showMessage("Export failed", 5000)
 
     def upload_log(self):
-        """Upload log to QRZ/LoTW"""
-        self.status_bar.showMessage("Upload functionality coming soon...", 3000)
-        # TODO: Implement upload
+        """Upload log to QRZ Logbook"""
+        from PySide6.QtWidgets import QMessageBox
+        from potahunter.ui.qrz_upload_dialog import QRZUploadDialog
+        from potahunter.models.database import DatabaseManager
+
+        # Check if API key is configured
+        api_key = self.settings.value("qrz/api_key", "")
+        if not api_key:
+            reply = QMessageBox.question(
+                self,
+                "QRZ API Key Required",
+                "You need to configure your QRZ Logbook API key before uploading.\n\n"
+                "Would you like to open the settings dialog now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                self.open_settings()
+            return
+
+        # Get all QSOs from database
+        db_manager = DatabaseManager()
+        qsos = db_manager.get_all_qsos()
+
+        if not qsos:
+            QMessageBox.information(
+                self,
+                "No QSOs",
+                "There are no QSOs in your logbook to upload.\n\n"
+                "Log some contacts first, then try uploading again."
+            )
+            return
+
+        # Open upload dialog
+        dialog = QRZUploadDialog(qsos, api_key, self)
+        if dialog.exec():
+            self.status_bar.showMessage("Upload completed", 3000)
 
     def open_logbook(self):
         """Open logbook viewer window"""
@@ -455,21 +551,29 @@ class MainWindow(QMainWindow):
         # Load current credentials
         username = self.settings.value("qrz/username", "")
         password = self.settings.value("qrz/password", "")
+        api_key = self.settings.value("qrz/api_key", "")
+        auto_upload = self.settings.value("qrz/auto_upload", False, type=bool)
         dialog.set_qrz_credentials(username, password)
+        dialog.set_qrz_api_key(api_key)
+        dialog.set_auto_upload_enabled(auto_upload)
 
         if dialog.exec():
             # Save credentials
             username, password = dialog.get_qrz_credentials()
+            api_key = dialog.get_qrz_api_key()
+            auto_upload = dialog.get_auto_upload_enabled()
             self.settings.setValue("qrz/username", username)
             self.settings.setValue("qrz/password", password)
+            self.settings.setValue("qrz/api_key", api_key)
+            self.settings.setValue("qrz/auto_upload", auto_upload)
 
             # Update QRZ service
             self.qrz_service.set_credentials(username, password)
 
             if username and password:
-                self.status_bar.showMessage("QRZ credentials saved", 3000)
+                self.status_bar.showMessage("QRZ settings saved", 3000)
             else:
-                self.status_bar.showMessage("QRZ credentials cleared", 3000)
+                self.status_bar.showMessage("QRZ settings updated", 3000)
 
     def show_about(self):
         """Show about dialog"""
