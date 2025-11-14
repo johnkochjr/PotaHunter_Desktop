@@ -4,16 +4,29 @@ A cross-platform desktop application for Parks on the Air (POTA) spotting and lo
 
 ## Features
 
+### Spotting
 - **Real-time POTA Spot Monitoring**: Automatically fetch and display active POTA spots from the POTA API
-- **QRZ Integration**: Real-time callsign lookup with detailed operator information (requires QRZ XML subscription)
-- **Smart Actions**: Double-click park to view on pota.app, or any other column to log the contact
 - **Color Coding**: Visual mode identification (CW=Blue, Digital=Green, Phone=Tan)
 - **Powerful Filtering**: Filter by band, mode, or search for specific parks/callsigns
-- **Quick Logging**: Pre-filled logging dialog with spot data
+- **Smart Actions**: Double-click park to view on pota.app, or any other column to log the contact
+- **Auto-refresh**: Configurable automatic spot refresh (60 seconds)
+
+### QRZ Integration
+- **Real-time Callsign Lookup**: Detailed operator information from QRZ.com (requires XML subscription)
+- **QSL Card Display**: View operator's QSL card image directly in the app
+- **Clickable Links**: Callsigns, emails, and QSL managers are clickable for easy access
+- **Auto-prefill Names**: Operator names automatically filled in logging dialog
+
+### Logging & Logbook
+- **Quick Logging**: Pre-filled logging dialog with spot data and QRZ information
+- **Logbook Viewer**: View all logged QSOs in a sortable, searchable table
+- **Edit Contacts**: Double-click any QSO to edit all fields
+- **Bulk Operations**: Multi-select QSOs and delete multiple contacts at once
 - **Local Database**: Store all your QSOs in a local SQLite database
+
+### Export & Integration
 - **ADIF Export**: Export your logs in standard ADIF format for importing into other logging software
 - **QRZ/LoTW Integration**: Upload logs directly to QRZ Logbook or ARRL LoTW (coming soon)
-- **Auto-refresh**: Configurable automatic spot refresh (60 seconds)
 
 ## Requirements
 
@@ -90,11 +103,29 @@ venv\Scripts\python.exe run.py
    - Your grid square
 4. Click "Save QSO" to save the contact to your local database
 
+### Viewing Your Logbook
+
+1. Click "View Logbook" button or use File → View Logbook
+2. Browse all your logged QSOs in a sortable table
+3. **Edit a QSO**: Double-click any row to edit contact details
+4. **Delete QSOs**:
+   - Right-click single QSO → Delete QSO
+   - Select multiple QSOs (Ctrl/Cmd+Click) → Right-click → Delete X QSOs
+5. All changes are saved immediately to the database
+
 ### Exporting Your Log
 
 1. Click "Export Log (ADIF)" or use File → Export Log
 2. Choose a location to save your ADIF file
 3. The exported file can be imported into other logging software or uploaded to QRZ/LoTW
+
+### QRZ Integration Setup
+
+1. Go to Tools → Settings
+2. Enter your QRZ.com username and password
+3. Click "Test Credentials" to verify (requires active QRZ XML subscription)
+4. Click "Save" to enable real-time callsign lookups
+5. Click any spot to see operator information and QSL card (if available)
 
 ## Project Structure
 
@@ -107,10 +138,14 @@ PotaHunter/
 │       ├── ui/                  # User interface components
 │       │   ├── __init__.py
 │       │   ├── main_window.py   # Main application window
-│       │   └── logging_dialog.py # QSO logging dialog
+│       │   ├── logging_dialog.py # QSO logging dialog
+│       │   ├── logbook_viewer.py # Logbook viewer window
+│       │   ├── qso_edit_dialog.py # QSO edit/delete dialog
+│       │   └── settings_dialog.py # Settings dialog
 │       ├── services/            # External API services
 │       │   ├── __init__.py
-│       │   └── pota_api.py      # POTA API integration
+│       │   ├── pota_api.py      # POTA API integration
+│       │   └── qrz_api.py       # QRZ XML API integration
 │       ├── models/              # Data models
 │       │   ├── __init__.py
 │       │   ├── qso.py           # QSO data model
@@ -121,14 +156,16 @@ PotaHunter/
 ├── tests/                       # Unit tests
 ├── data/                        # Local database storage
 ├── requirements.txt             # Python dependencies
+├── run.py                       # Application launcher
 └── README.md                    # This file
 ```
 
 ## Data Storage
 
-- QSOs are stored in a SQLite database located at `data/potahunter.db`
+- **QSO Database**: QSOs are stored in a SQLite database at `data/potahunter.db`
+- **Settings**: QRZ credentials and preferences are stored using platform-native settings (macOS: ~/Library/Preferences, Windows: Registry, Linux: ~/.config)
 - The database is created automatically on first run
-- Backup your `data/` directory to preserve your log
+- **Backup**: Backup your `data/` directory to preserve your log
 
 ## Development
 
@@ -154,16 +191,20 @@ pylint src/potahunter/
 
 - [x] Real-time POTA spot display
 - [x] Local QSO logging
+- [x] Logbook viewer with edit/delete
+- [x] Multi-select and bulk delete
+- [x] QRZ XML API integration
+- [x] QSL card image display
+- [x] Color-coded modes
+- [x] Filter spots by band, mode, or location
+- [x] User preferences/settings dialog
 - [x] ADIF export
 - [ ] Grid square calculation from park location
 - [ ] QRZ Logbook upload
 - [ ] LoTW upload via TQSL
 - [ ] Duplicate contact checking
 - [ ] Log statistics and analytics
-- [ ] Configurable refresh intervals
-- [ ] Filter spots by band, mode, or location
 - [ ] Map view of active parks
-- [ ] User preferences/settings dialog
 
 ## Contributing
 
