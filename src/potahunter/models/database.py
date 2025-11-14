@@ -209,6 +209,60 @@ class DatabaseManager:
 
         return [self._row_to_qso(row) for row in rows]
 
+    def update_qso(self, qso: QSO) -> bool:
+        """
+        Update an existing QSO in the database
+
+        Args:
+            qso: QSO object with updated data (must have id set)
+
+        Returns:
+            True if updated, False otherwise
+        """
+        if qso.id is None:
+            raise ValueError("QSO must have an ID to update")
+
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE qsos SET
+                callsign = ?,
+                frequency = ?,
+                mode = ?,
+                qso_date = ?,
+                time_on = ?,
+                time_off = ?,
+                rst_sent = ?,
+                rst_rcvd = ?,
+                park_reference = ?,
+                gridsquare = ?,
+                name = ?,
+                comment = ?,
+                qth = ?,
+                state = ?,
+                country = ?,
+                band = ?,
+                my_gridsquare = ?,
+                my_sig = ?,
+                my_sig_info = ?,
+                sig = ?,
+                sig_info = ?
+            WHERE id = ?
+        ''', (
+            qso.callsign, qso.frequency, qso.mode, qso.qso_date, qso.time_on,
+            qso.time_off, qso.rst_sent, qso.rst_rcvd, qso.park_reference,
+            qso.gridsquare, qso.name, qso.comment, qso.qth, qso.state,
+            qso.country, qso.band, qso.my_gridsquare, qso.my_sig,
+            qso.my_sig_info, qso.sig, qso.sig_info, qso.id
+        ))
+
+        updated = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+
+        return updated
+
     def delete_qso(self, qso_id: int) -> bool:
         """
         Delete a QSO by ID

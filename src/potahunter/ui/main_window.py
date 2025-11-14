@@ -16,6 +16,7 @@ from potahunter.services.pota_api import PotaAPIService
 from potahunter.services.qrz_api import QRZAPIService
 from potahunter.ui.logging_dialog import LoggingDialog
 from potahunter.ui.settings_dialog import SettingsDialog
+from potahunter.ui.logbook_viewer import LogbookViewer
 
 class MainWindow(QMainWindow):
     """Main application window displaying POTA spots"""
@@ -115,6 +116,10 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.auto_refresh_button)
 
         button_layout.addStretch()
+
+        self.logbook_button = QPushButton("View Logbook")
+        self.logbook_button.clicked.connect(self.open_logbook)
+        button_layout.addWidget(self.logbook_button)
 
         self.export_button = QPushButton("Export Log (ADIF)")
         self.export_button.clicked.connect(self.export_log)
@@ -224,6 +229,12 @@ class MainWindow(QMainWindow):
 
         # File menu
         file_menu = menubar.addMenu("&File")
+
+        logbook_action = QAction("View &Logbook", self)
+        logbook_action.triggered.connect(self.open_logbook)
+        file_menu.addAction(logbook_action)
+
+        file_menu.addSeparator()
 
         export_action = QAction("&Export Log (ADIF)", self)
         export_action.triggered.connect(self.export_log)
@@ -430,6 +441,12 @@ class MainWindow(QMainWindow):
         """Upload log to QRZ/LoTW"""
         self.status_bar.showMessage("Upload functionality coming soon...", 3000)
         # TODO: Implement upload
+
+    def open_logbook(self):
+        """Open logbook viewer window"""
+        logbook_window = LogbookViewer(self)
+        logbook_window.show()
+        self.status_bar.showMessage("Opened logbook viewer", 2000)
 
     def open_settings(self):
         """Open settings dialog"""
