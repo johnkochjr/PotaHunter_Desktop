@@ -66,10 +66,11 @@ class LogbookViewer(QMainWindow):
 
         # QSO Table
         self.qso_table = QTableWidget()
-        self.qso_table.setColumnCount(11)
+        self.qso_table.setColumnCount(18)
         self.qso_table.setHorizontalHeaderLabels([
-            "Date", "Time", "Callsign", "Frequency", "Mode",
-            "Band", "RST Sent", "RST Rcvd", "Park", "Name", "QTH"
+            "Date", "Time", "Callsign", "Frequency", "Mode", "Band",
+            "RST Sent", "RST Rcvd", "Park", "Grid", "Name", "QTH",
+            "State", "County", "My Call", "My Grid", "Comment", "QRZ"
         ])
 
         # Enable sorting
@@ -79,8 +80,8 @@ class LogbookViewer(QMainWindow):
         header = self.qso_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.Stretch)  # Callsign
-        header.setSectionResizeMode(9, QHeaderView.Stretch)  # Name
-        header.setSectionResizeMode(10, QHeaderView.Stretch)  # QTH
+        header.setSectionResizeMode(10, QHeaderView.Stretch)  # Name
+        header.setSectionResizeMode(16, QHeaderView.Stretch)  # Comment
 
         # Double-click handler
         self.qso_table.doubleClicked.connect(self.edit_qso)
@@ -96,7 +97,7 @@ class LogbookViewer(QMainWindow):
         layout.addWidget(self.qso_table)
 
         # Instructions
-        instructions = QLabel("Double-click to edit • Right-click for options • Ctrl/Cmd+Click to select multiple")
+        instructions = QLabel("Double-click to edit • Right-click for options • Ctrl/Cmd+Click to select multiple • ✓ = Uploaded to QRZ")
         instructions.setStyleSheet("color: gray; font-style: italic;")
         layout.addWidget(instructions)
 
@@ -160,27 +161,36 @@ class LogbookViewer(QMainWindow):
             rst_sent_item = QTableWidgetItem(qso.rst_sent or "")
             rst_rcvd_item = QTableWidgetItem(qso.rst_rcvd or "")
             park_item = QTableWidgetItem(qso.park_reference or "")
+            grid_item = QTableWidgetItem(qso.gridsquare or "")
             name_item = QTableWidgetItem(qso.name or "")
             qth_item = QTableWidgetItem(qso.qth or "")
+            state_item = QTableWidgetItem(qso.state or "")
+            county_item = QTableWidgetItem(qso.county or "")
+            my_call_item = QTableWidgetItem(qso.my_callsign or "")
+            my_grid_item = QTableWidgetItem(qso.my_gridsquare or "")
+            comment_item = QTableWidgetItem(qso.comment or "")
+
+            # QRZ upload status
+            qrz_item = QTableWidgetItem("✓" if qso.qrz_uploaded else "")
+            qrz_item.setTextAlignment(Qt.AlignCenter)
+            if qso.qrz_uploaded:
+                qrz_item.setForeground(QBrush(QColor(0, 128, 0)))  # Green
 
             # Store QSO ID in the first column for later reference
             date_item.setData(Qt.UserRole, qso.id)
 
             # Highlight POTA contacts
+            items = [
+                date_item, time_item, callsign_item, freq_item, mode_item, band_item,
+                rst_sent_item, rst_rcvd_item, park_item, grid_item, name_item, qth_item,
+                state_item, county_item, my_call_item, my_grid_item, comment_item, qrz_item
+            ]
+
             if qso.park_reference:
                 color = QColor(255, 250, 205)  # Light yellow
                 brush = QBrush(color)
-                date_item.setBackground(brush)
-                time_item.setBackground(brush)
-                callsign_item.setBackground(brush)
-                freq_item.setBackground(brush)
-                mode_item.setBackground(brush)
-                band_item.setBackground(brush)
-                rst_sent_item.setBackground(brush)
-                rst_rcvd_item.setBackground(brush)
-                park_item.setBackground(brush)
-                name_item.setBackground(brush)
-                qth_item.setBackground(brush)
+                for item in items:
+                    item.setBackground(brush)
 
             # Set items in table
             self.qso_table.setItem(row, 0, date_item)
@@ -192,8 +202,15 @@ class LogbookViewer(QMainWindow):
             self.qso_table.setItem(row, 6, rst_sent_item)
             self.qso_table.setItem(row, 7, rst_rcvd_item)
             self.qso_table.setItem(row, 8, park_item)
-            self.qso_table.setItem(row, 9, name_item)
-            self.qso_table.setItem(row, 10, qth_item)
+            self.qso_table.setItem(row, 9, grid_item)
+            self.qso_table.setItem(row, 10, name_item)
+            self.qso_table.setItem(row, 11, qth_item)
+            self.qso_table.setItem(row, 12, state_item)
+            self.qso_table.setItem(row, 13, county_item)
+            self.qso_table.setItem(row, 14, my_call_item)
+            self.qso_table.setItem(row, 15, my_grid_item)
+            self.qso_table.setItem(row, 16, comment_item)
+            self.qso_table.setItem(row, 17, qrz_item)
 
         self.qso_table.setSortingEnabled(True)
         # Sort by date and time (most recent first)

@@ -49,3 +49,6 @@ htmlcov/
 
 # Logs
 *.log
+
+# Distribution packages
+*.zip

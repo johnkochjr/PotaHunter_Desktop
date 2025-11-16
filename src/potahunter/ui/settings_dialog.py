@@ -111,10 +111,113 @@ class SettingsDialog(QDialog):
 
         tabs.addTab(qrz_tab, "QRZ Credentials")
 
-        # Station Info Tab (for future use)
+        # Station Info Tab
         station_tab = QWidget()
         station_layout = QVBoxLayout(station_tab)
-        station_layout.addWidget(QLabel("Station settings coming soon..."))
+
+        station_info = QLabel(
+            "Enter your station information. These values will be automatically "
+            "included in your QSOs and ADIF exports."
+        )
+        station_info.setWordWrap(True)
+        station_layout.addWidget(station_info)
+        station_layout.addSpacing(10)
+
+        station_form = QFormLayout()
+
+        # Basic station info
+        basic_header = QLabel("<b>Basic Information</b>")
+        station_layout.addWidget(basic_header)
+
+        self.my_callsign = QLineEdit()
+        self.my_callsign.setPlaceholderText("Your callsign")
+        station_form.addRow("Callsign:", self.my_callsign)
+
+        self.operator = QLineEdit()
+        self.operator.setPlaceholderText("Operator callsign (if different)")
+        station_form.addRow("Operator:", self.operator)
+
+        self.my_gridsquare_station = QLineEdit()
+        self.my_gridsquare_station.setPlaceholderText("e.g., EN44av")
+        station_form.addRow("Grid Square:", self.my_gridsquare_station)
+
+        station_layout.addLayout(station_form)
+        station_layout.addSpacing(15)
+
+        # Location info
+        location_header = QLabel("<b>Location</b>")
+        station_layout.addWidget(location_header)
+
+        location_form = QFormLayout()
+
+        self.my_street = QLineEdit()
+        self.my_street.setPlaceholderText("Street address")
+        location_form.addRow("Street:", self.my_street)
+
+        self.my_city = QLineEdit()
+        self.my_city.setPlaceholderText("City")
+        location_form.addRow("City:", self.my_city)
+
+        self.my_county = QLineEdit()
+        self.my_county.setPlaceholderText("e.g., Washington")
+        location_form.addRow("County:", self.my_county)
+
+        self.my_state = QLineEdit()
+        self.my_state.setPlaceholderText("State/Province (2-letter code)")
+        location_form.addRow("State:", self.my_state)
+
+        self.my_postal_code = QLineEdit()
+        self.my_postal_code.setPlaceholderText("ZIP/Postal code")
+        location_form.addRow("Postal Code:", self.my_postal_code)
+
+        self.my_country = QLineEdit()
+        self.my_country.setPlaceholderText("e.g., United States")
+        location_form.addRow("Country:", self.my_country)
+
+        self.my_dxcc = QLineEdit()
+        self.my_dxcc.setPlaceholderText("e.g., 291 for USA")
+        location_form.addRow("DXCC:", self.my_dxcc)
+
+        station_layout.addLayout(location_form)
+        station_layout.addSpacing(15)
+
+        # Coordinates
+        coord_header = QLabel("<b>Coordinates</b>")
+        station_layout.addWidget(coord_header)
+
+        coord_form = QFormLayout()
+
+        self.my_lat = QLineEdit()
+        self.my_lat.setPlaceholderText("e.g., N044 52.635")
+        coord_form.addRow("Latitude:", self.my_lat)
+
+        self.my_lon = QLineEdit()
+        self.my_lon.setPlaceholderText("e.g., W091 55.432")
+        coord_form.addRow("Longitude:", self.my_lon)
+
+        station_layout.addLayout(coord_form)
+        station_layout.addSpacing(15)
+
+        # Equipment
+        equipment_header = QLabel("<b>Equipment</b>")
+        station_layout.addWidget(equipment_header)
+
+        equipment_form = QFormLayout()
+
+        self.my_rig = QLineEdit()
+        self.my_rig.setPlaceholderText("e.g., Yaesu FT-891")
+        equipment_form.addRow("Radio:", self.my_rig)
+
+        self.tx_pwr = QLineEdit()
+        self.tx_pwr.setPlaceholderText("e.g., 100")
+        equipment_form.addRow("TX Power (W):", self.tx_pwr)
+
+        self.ant_az = QLineEdit()
+        self.ant_az.setPlaceholderText("e.g., 90 (degrees)")
+        equipment_form.addRow("Antenna Azimuth:", self.ant_az)
+
+        station_layout.addLayout(equipment_form)
+
         station_layout.addStretch()
         tabs.addTab(station_tab, "Station Info")
 
@@ -204,23 +307,23 @@ class SettingsDialog(QDialog):
     def test_qrz_credentials(self):
         """Test QRZ credentials by attempting authentication"""
         from potahunter.services.qrz_api import QRZAPIService
-        
+
         username = self.qrz_username.text().strip()
         password = self.qrz_password.text().strip()
-        
+
         if not username or not password:
             self.qrz_test_result.setText(
                 "<span style='color: orange;'>⚠️ Please enter both username and password</span>"
             )
             return
-        
+
         self.qrz_test_result.setText("<i>Testing credentials...</i>")
         self.test_qrz_button.setEnabled(False)
-        
+
         # Test authentication
         qrz = QRZAPIService()
         qrz.set_credentials(username, password)
-        
+
         if qrz.authenticate():
             self.qrz_test_result.setText(
                 "<span style='color: green;'>✓ Credentials valid! Authentication successful.</span>"
@@ -230,5 +333,44 @@ class SettingsDialog(QDialog):
                 "<span style='color: red;'>✗ Authentication failed. "
                 "Check your username, password, and QRZ subscription status.</span>"
             )
-        
+
         self.test_qrz_button.setEnabled(True)
+
+    # Station Info getters and setters
+    def get_station_info(self):
+        """Get all station information as dictionary"""
+        return {
+            'my_callsign': self.my_callsign.text().strip(),
+            'operator': self.operator.text().strip(),
+            'my_gridsquare': self.my_gridsquare_station.text().strip(),
+            'my_street': self.my_street.text().strip(),
+            'my_city': self.my_city.text().strip(),
+            'my_county': self.my_county.text().strip(),
+            'my_state': self.my_state.text().strip(),
+            'my_postal_code': self.my_postal_code.text().strip(),
+            'my_country': self.my_country.text().strip(),
+            'my_dxcc': self.my_dxcc.text().strip(),
+            'my_lat': self.my_lat.text().strip(),
+            'my_lon': self.my_lon.text().strip(),
+            'my_rig': self.my_rig.text().strip(),
+            'tx_pwr': self.tx_pwr.text().strip(),
+            'ant_az': self.ant_az.text().strip(),
+        }
+
+    def set_station_info(self, info):
+        """Set station information from dictionary"""
+        self.my_callsign.setText(info.get('my_callsign', ''))
+        self.operator.setText(info.get('operator', ''))
+        self.my_gridsquare_station.setText(info.get('my_gridsquare', ''))
+        self.my_street.setText(info.get('my_street', ''))
+        self.my_city.setText(info.get('my_city', ''))
+        self.my_county.setText(info.get('my_county', ''))
+        self.my_state.setText(info.get('my_state', ''))
+        self.my_postal_code.setText(info.get('my_postal_code', ''))
+        self.my_country.setText(info.get('my_country', ''))
+        self.my_dxcc.setText(info.get('my_dxcc', ''))
+        self.my_lat.setText(info.get('my_lat', ''))
+        self.my_lon.setText(info.get('my_lon', ''))
+        self.my_rig.setText(info.get('my_rig', ''))
+        self.tx_pwr.setText(info.get('tx_pwr', ''))
+        self.ant_az.setText(info.get('ant_az', ''))

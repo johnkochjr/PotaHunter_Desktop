@@ -11,6 +11,7 @@ from typing import Optional
 class QSO:
     """Represents a single QSO (contact)"""
 
+    # Core QSO fields
     callsign: str
     frequency: str
     mode: str
@@ -18,20 +19,58 @@ class QSO:
     time_on: str  # HHMMSS format
     rst_sent: str = "59"
     rst_rcvd: str = "59"
+
+    # Contacted station fields
     park_reference: Optional[str] = None
     gridsquare: Optional[str] = None
     name: Optional[str] = None
     comment: Optional[str] = None
     qth: Optional[str] = None
     state: Optional[str] = None
+    county: Optional[str] = None
     country: Optional[str] = None
-    band: Optional[str] = None
-    time_off: Optional[str] = None
+    dxcc: Optional[str] = None
+    cont: Optional[str] = None
+    cqz: Optional[str] = None
+    lat: Optional[str] = None
+    lon: Optional[str] = None
+    email: Optional[str] = None
+    web: Optional[str] = None
+    qsl_via: Optional[str] = None
+    qsl_sent: Optional[str] = None
+
+    # My station fields
+    my_callsign: Optional[str] = None
     my_gridsquare: Optional[str] = None
+    my_city: Optional[str] = None
+    my_state: Optional[str] = None
+    my_county: Optional[str] = None
+    my_country: Optional[str] = None
+    my_dxcc: Optional[str] = None
+    my_lat: Optional[str] = None
+    my_lon: Optional[str] = None
+    my_postal_code: Optional[str] = None
+    my_street: Optional[str] = None
+    my_rig: Optional[str] = None
+    tx_pwr: Optional[str] = None
+    ant_az: Optional[str] = None
+    operator: Optional[str] = None
+
+    # Technical fields
+    band: Optional[str] = None
+    band_rx: Optional[str] = None
+    freq_rx: Optional[str] = None
+    time_off: Optional[str] = None
+    qso_date_off: Optional[str] = None
+    submode: Optional[str] = None
+
+    # POTA fields
     my_sig: str = "POTA"
     my_sig_info: Optional[str] = None
     sig: Optional[str] = None
     sig_info: Optional[str] = None
+
+    # Internal fields
     id: Optional[int] = None
     qrz_uploaded: bool = False
     qrz_upload_date: Optional[str] = None
@@ -124,6 +163,7 @@ class QSO:
     def to_dict(self) -> dict:
         """Convert QSO to dictionary for database storage"""
         return {
+            # Core fields
             'callsign': self.callsign,
             'frequency': self.frequency,
             'mode': self.mode,
@@ -131,16 +171,48 @@ class QSO:
             'time_on': self.time_on,
             'rst_sent': self.rst_sent,
             'rst_rcvd': self.rst_rcvd,
+            # Contacted station
             'park_reference': self.park_reference,
             'gridsquare': self.gridsquare,
             'name': self.name,
             'comment': self.comment,
             'qth': self.qth,
             'state': self.state,
+            'county': self.county,
             'country': self.country,
-            'band': self.band,
-            'time_off': self.time_off,
+            'dxcc': self.dxcc,
+            'cont': self.cont,
+            'cqz': self.cqz,
+            'lat': self.lat,
+            'lon': self.lon,
+            'email': self.email,
+            'web': self.web,
+            'qsl_via': self.qsl_via,
+            'qsl_sent': self.qsl_sent,
+            # My station
+            'my_callsign': self.my_callsign,
             'my_gridsquare': self.my_gridsquare,
+            'my_city': self.my_city,
+            'my_state': self.my_state,
+            'my_county': self.my_county,
+            'my_country': self.my_country,
+            'my_dxcc': self.my_dxcc,
+            'my_lat': self.my_lat,
+            'my_lon': self.my_lon,
+            'my_postal_code': self.my_postal_code,
+            'my_street': self.my_street,
+            'my_rig': self.my_rig,
+            'tx_pwr': self.tx_pwr,
+            'ant_az': self.ant_az,
+            'operator': self.operator,
+            # Technical
+            'band': self.band,
+            'band_rx': self.band_rx,
+            'freq_rx': self.freq_rx,
+            'time_off': self.time_off,
+            'qso_date_off': self.qso_date_off,
+            'submode': self.submode,
+            # POTA
             'my_sig': self.my_sig,
             'my_sig_info': self.my_sig_info,
             'sig': self.sig,

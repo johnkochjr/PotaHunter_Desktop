@@ -548,7 +548,7 @@ class MainWindow(QMainWindow):
         """Open settings dialog"""
         dialog = SettingsDialog(self)
 
-        # Load current credentials
+        # Load current QRZ credentials
         username = self.settings.value("qrz/username", "")
         password = self.settings.value("qrz/password", "")
         api_key = self.settings.value("qrz/api_key", "")
@@ -557,8 +557,28 @@ class MainWindow(QMainWindow):
         dialog.set_qrz_api_key(api_key)
         dialog.set_auto_upload_enabled(auto_upload)
 
+        # Load current station information
+        station_info = {
+            'my_callsign': self.settings.value("station/my_callsign", ""),
+            'operator': self.settings.value("station/operator", ""),
+            'my_gridsquare': self.settings.value("station/my_gridsquare", ""),
+            'my_street': self.settings.value("station/my_street", ""),
+            'my_city': self.settings.value("station/my_city", ""),
+            'my_county': self.settings.value("station/my_county", ""),
+            'my_state': self.settings.value("station/my_state", ""),
+            'my_postal_code': self.settings.value("station/my_postal_code", ""),
+            'my_country': self.settings.value("station/my_country", ""),
+            'my_dxcc': self.settings.value("station/my_dxcc", ""),
+            'my_lat': self.settings.value("station/my_lat", ""),
+            'my_lon': self.settings.value("station/my_lon", ""),
+            'my_rig': self.settings.value("station/my_rig", ""),
+            'tx_pwr': self.settings.value("station/tx_pwr", ""),
+            'ant_az': self.settings.value("station/ant_az", ""),
+        }
+        dialog.set_station_info(station_info)
+
         if dialog.exec():
-            # Save credentials
+            # Save QRZ credentials
             username, password = dialog.get_qrz_credentials()
             api_key = dialog.get_qrz_api_key()
             auto_upload = dialog.get_auto_upload_enabled()
@@ -567,13 +587,15 @@ class MainWindow(QMainWindow):
             self.settings.setValue("qrz/api_key", api_key)
             self.settings.setValue("qrz/auto_upload", auto_upload)
 
+            # Save station information
+            station_info = dialog.get_station_info()
+            for key, value in station_info.items():
+                self.settings.setValue(f"station/{key}", value)
+
             # Update QRZ service
             self.qrz_service.set_credentials(username, password)
 
-            if username and password:
-                self.status_bar.showMessage("QRZ settings saved", 3000)
-            else:
-                self.status_bar.showMessage("QRZ settings updated", 3000)
+            self.status_bar.showMessage("Settings saved", 3000)
 
     def show_about(self):
         """Show about dialog"""

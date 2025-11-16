@@ -60,6 +60,41 @@ class DatabaseManager:
                 sig_info TEXT,
                 qrz_uploaded INTEGER DEFAULT 0,
                 qrz_upload_date TEXT,
+
+                -- Contacted station fields
+                county TEXT,
+                dxcc TEXT,
+                cont TEXT,
+                cqz TEXT,
+                lat TEXT,
+                lon TEXT,
+                email TEXT,
+                web TEXT,
+                qsl_via TEXT,
+                qsl_sent TEXT,
+
+                -- My station fields
+                my_callsign TEXT,
+                operator TEXT,
+                my_city TEXT,
+                my_state TEXT,
+                my_county TEXT,
+                my_country TEXT,
+                my_dxcc TEXT,
+                my_lat TEXT,
+                my_lon TEXT,
+                my_postal_code TEXT,
+                my_street TEXT,
+                my_rig TEXT,
+                tx_pwr TEXT,
+                ant_az TEXT,
+
+                -- Technical fields
+                band_rx TEXT,
+                freq_rx TEXT,
+                qso_date_off TEXT,
+                submode TEXT,
+
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -86,15 +121,77 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Check if qrz_uploaded column exists
+        # Check existing columns
         cursor.execute("PRAGMA table_info(qsos)")
         columns = [column[1] for column in cursor.fetchall()]
 
+        # QRZ columns
         if 'qrz_uploaded' not in columns:
             cursor.execute('ALTER TABLE qsos ADD COLUMN qrz_uploaded INTEGER DEFAULT 0')
-
         if 'qrz_upload_date' not in columns:
             cursor.execute('ALTER TABLE qsos ADD COLUMN qrz_upload_date TEXT')
+
+        # Contacted station fields
+        if 'county' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN county TEXT')
+        if 'dxcc' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN dxcc TEXT')
+        if 'cont' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN cont TEXT')
+        if 'cqz' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN cqz TEXT')
+        if 'lat' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN lat TEXT')
+        if 'lon' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN lon TEXT')
+        if 'email' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN email TEXT')
+        if 'web' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN web TEXT')
+        if 'qsl_via' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN qsl_via TEXT')
+        if 'qsl_sent' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN qsl_sent TEXT')
+
+        # My station fields
+        if 'my_callsign' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_callsign TEXT')
+        if 'operator' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN operator TEXT')
+        if 'my_city' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_city TEXT')
+        if 'my_state' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_state TEXT')
+        if 'my_county' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_county TEXT')
+        if 'my_country' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_country TEXT')
+        if 'my_dxcc' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_dxcc TEXT')
+        if 'my_lat' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_lat TEXT')
+        if 'my_lon' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_lon TEXT')
+        if 'my_postal_code' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_postal_code TEXT')
+        if 'my_street' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_street TEXT')
+        if 'my_rig' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN my_rig TEXT')
+        if 'tx_pwr' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN tx_pwr TEXT')
+        if 'ant_az' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN ant_az TEXT')
+
+        # Technical fields
+        if 'band_rx' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN band_rx TEXT')
+        if 'freq_rx' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN freq_rx TEXT')
+        if 'qso_date_off' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN qso_date_off TEXT')
+        if 'submode' not in columns:
+            cursor.execute('ALTER TABLE qsos ADD COLUMN submode TEXT')
 
         conn.commit()
         conn.close()
@@ -117,15 +214,26 @@ class DatabaseManager:
                 callsign, frequency, mode, qso_date, time_on, time_off,
                 rst_sent, rst_rcvd, park_reference, gridsquare, name,
                 comment, qth, state, country, band, my_gridsquare,
-                my_sig, my_sig_info, sig, sig_info, qrz_uploaded, qrz_upload_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                my_sig, my_sig_info, sig, sig_info, qrz_uploaded, qrz_upload_date,
+                county, dxcc, cont, cqz, lat, lon, email, web, qsl_via, qsl_sent,
+                my_callsign, operator, my_city, my_state, my_county, my_country,
+                my_dxcc, my_lat, my_lon, my_postal_code, my_street, my_rig,
+                tx_pwr, ant_az, band_rx, freq_rx, qso_date_off, submode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             qso.callsign, qso.frequency, qso.mode, qso.qso_date, qso.time_on,
             qso.time_off, qso.rst_sent, qso.rst_rcvd, qso.park_reference,
             qso.gridsquare, qso.name, qso.comment, qso.qth, qso.state,
             qso.country, qso.band, qso.my_gridsquare, qso.my_sig,
             qso.my_sig_info, qso.sig, qso.sig_info,
-            1 if qso.qrz_uploaded else 0, qso.qrz_upload_date
+            1 if qso.qrz_uploaded else 0, qso.qrz_upload_date,
+            qso.county, qso.dxcc, qso.cont, qso.cqz, qso.lat, qso.lon,
+            qso.email, qso.web, qso.qsl_via, qso.qsl_sent,
+            qso.my_callsign, qso.operator, qso.my_city, qso.my_state,
+            qso.my_county, qso.my_country, qso.my_dxcc, qso.my_lat,
+            qso.my_lon, qso.my_postal_code, qso.my_street, qso.my_rig,
+            qso.tx_pwr, qso.ant_az, qso.band_rx, qso.freq_rx,
+            qso.qso_date_off, qso.submode
         ))
 
         qso_id = cursor.lastrowid
@@ -149,37 +257,7 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
 
-        qsos = []
-        for row in rows:
-            qso = QSO(
-                callsign=row['callsign'],
-                frequency=row['frequency'],
-                mode=row['mode'],
-                qso_date=row['qso_date'],
-                time_on=row['time_on'],
-                time_off=row['time_off'],
-                rst_sent=row['rst_sent'],
-                rst_rcvd=row['rst_rcvd'],
-                park_reference=row['park_reference'],
-                gridsquare=row['gridsquare'],
-                name=row['name'],
-                comment=row['comment'],
-                qth=row['qth'],
-                state=row['state'],
-                country=row['country'],
-                band=row['band'],
-                my_gridsquare=row['my_gridsquare'],
-                my_sig=row['my_sig'],
-                my_sig_info=row['my_sig_info'],
-                sig=row['sig'],
-                sig_info=row['sig_info'],
-                id=row['id'],
-                qrz_uploaded=bool(row['qrz_uploaded']) if 'qrz_uploaded' in row.keys() else False,
-                qrz_upload_date=row['qrz_upload_date'] if 'qrz_upload_date' in row.keys() else None
-            )
-            qsos.append(qso)
-
-        return qsos
+        return [self._row_to_qso(row) for row in rows]
 
     def get_qsos_by_date(self, start_date: str, end_date: str = None) -> List[QSO]:
         """
@@ -275,7 +353,35 @@ class DatabaseManager:
                 sig = ?,
                 sig_info = ?,
                 qrz_uploaded = ?,
-                qrz_upload_date = ?
+                qrz_upload_date = ?,
+                county = ?,
+                dxcc = ?,
+                cont = ?,
+                cqz = ?,
+                lat = ?,
+                lon = ?,
+                email = ?,
+                web = ?,
+                qsl_via = ?,
+                qsl_sent = ?,
+                my_callsign = ?,
+                operator = ?,
+                my_city = ?,
+                my_state = ?,
+                my_county = ?,
+                my_country = ?,
+                my_dxcc = ?,
+                my_lat = ?,
+                my_lon = ?,
+                my_postal_code = ?,
+                my_street = ?,
+                my_rig = ?,
+                tx_pwr = ?,
+                ant_az = ?,
+                band_rx = ?,
+                freq_rx = ?,
+                qso_date_off = ?,
+                submode = ?
             WHERE id = ?
         ''', (
             qso.callsign, qso.frequency, qso.mode, qso.qso_date, qso.time_on,
@@ -283,7 +389,14 @@ class DatabaseManager:
             qso.gridsquare, qso.name, qso.comment, qso.qth, qso.state,
             qso.country, qso.band, qso.my_gridsquare, qso.my_sig,
             qso.my_sig_info, qso.sig, qso.sig_info,
-            1 if qso.qrz_uploaded else 0, qso.qrz_upload_date, qso.id
+            1 if qso.qrz_uploaded else 0, qso.qrz_upload_date,
+            qso.county, qso.dxcc, qso.cont, qso.cqz, qso.lat, qso.lon,
+            qso.email, qso.web, qso.qsl_via, qso.qsl_sent,
+            qso.my_callsign, qso.operator, qso.my_city, qso.my_state,
+            qso.my_county, qso.my_country, qso.my_dxcc, qso.my_lat,
+            qso.my_lon, qso.my_postal_code, qso.my_street, qso.my_rig,
+            qso.tx_pwr, qso.ant_az, qso.band_rx, qso.freq_rx,
+            qso.qso_date_off, qso.submode, qso.id
         ))
 
         updated = cursor.rowcount > 0
@@ -367,5 +480,36 @@ class DatabaseManager:
             sig_info=row['sig_info'],
             id=row['id'],
             qrz_uploaded=bool(row['qrz_uploaded']) if 'qrz_uploaded' in row.keys() else False,
-            qrz_upload_date=row['qrz_upload_date'] if 'qrz_upload_date' in row.keys() else None
+            qrz_upload_date=row['qrz_upload_date'] if 'qrz_upload_date' in row.keys() else None,
+            # Contacted station fields
+            county=row['county'] if 'county' in row.keys() else None,
+            dxcc=row['dxcc'] if 'dxcc' in row.keys() else None,
+            cont=row['cont'] if 'cont' in row.keys() else None,
+            cqz=row['cqz'] if 'cqz' in row.keys() else None,
+            lat=row['lat'] if 'lat' in row.keys() else None,
+            lon=row['lon'] if 'lon' in row.keys() else None,
+            email=row['email'] if 'email' in row.keys() else None,
+            web=row['web'] if 'web' in row.keys() else None,
+            qsl_via=row['qsl_via'] if 'qsl_via' in row.keys() else None,
+            qsl_sent=row['qsl_sent'] if 'qsl_sent' in row.keys() else None,
+            # My station fields
+            my_callsign=row['my_callsign'] if 'my_callsign' in row.keys() else None,
+            operator=row['operator'] if 'operator' in row.keys() else None,
+            my_city=row['my_city'] if 'my_city' in row.keys() else None,
+            my_state=row['my_state'] if 'my_state' in row.keys() else None,
+            my_county=row['my_county'] if 'my_county' in row.keys() else None,
+            my_country=row['my_country'] if 'my_country' in row.keys() else None,
+            my_dxcc=row['my_dxcc'] if 'my_dxcc' in row.keys() else None,
+            my_lat=row['my_lat'] if 'my_lat' in row.keys() else None,
+            my_lon=row['my_lon'] if 'my_lon' in row.keys() else None,
+            my_postal_code=row['my_postal_code'] if 'my_postal_code' in row.keys() else None,
+            my_street=row['my_street'] if 'my_street' in row.keys() else None,
+            my_rig=row['my_rig'] if 'my_rig' in row.keys() else None,
+            tx_pwr=row['tx_pwr'] if 'tx_pwr' in row.keys() else None,
+            ant_az=row['ant_az'] if 'ant_az' in row.keys() else None,
+            # Technical fields
+            band_rx=row['band_rx'] if 'band_rx' in row.keys() else None,
+            freq_rx=row['freq_rx'] if 'freq_rx' in row.keys() else None,
+            qso_date_off=row['qso_date_off'] if 'qso_date_off' in row.keys() else None,
+            submode=row['submode'] if 'submode' in row.keys() else None
         )

@@ -134,8 +134,8 @@ class LoggingDialog(QDialog):
         layout.addLayout(button_layout)
 
     def prefill_data(self):
-        """Prefill form with spot data"""
-        # Fill callsign
+        """Prefill form with spot data and station info"""
+        # Fill contacted station data from spot
         if 'callsign' in self.spot_data:
             self.callsign_input.setText(self.spot_data['callsign'])
 
@@ -169,8 +169,10 @@ class LoggingDialog(QDialog):
         self.date_input.setText(now.strftime("%Y%m%d"))
         self.time_input.setText(now.strftime("%H%M%S"))
 
-        # TODO: Calculate grid square from park location
-        # This would require geocoding the park location or maintaining a lookup table
+        # Load and prefill MY station information from settings
+        my_gridsquare = self.settings.value("station/my_gridsquare", "")
+        if my_gridsquare:
+            self.my_grid_input.setText(my_gridsquare)
 
     def save_qso(self):
         """Validate and save the QSO"""
@@ -202,6 +204,23 @@ class LoggingDialog(QDialog):
 
         # Create QSO object
         try:
+            # Load station information from settings
+            my_callsign = self.settings.value("station/my_callsign", None)
+            operator = self.settings.value("station/operator", None)
+            my_gridsquare = self.my_grid_input.text().strip().upper() or self.settings.value("station/my_gridsquare", None)
+            my_city = self.settings.value("station/my_city", None)
+            my_state = self.settings.value("station/my_state", None)
+            my_county = self.settings.value("station/my_county", None)
+            my_country = self.settings.value("station/my_country", None)
+            my_dxcc = self.settings.value("station/my_dxcc", None)
+            my_lat = self.settings.value("station/my_lat", None)
+            my_lon = self.settings.value("station/my_lon", None)
+            my_postal_code = self.settings.value("station/my_postal_code", None)
+            my_street = self.settings.value("station/my_street", None)
+            my_rig = self.settings.value("station/my_rig", None)
+            tx_pwr = self.settings.value("station/tx_pwr", None)
+            ant_az = self.settings.value("station/ant_az", None)
+
             qso = QSO(
                 callsign=self.callsign_input.text().strip().upper(),
                 frequency=self.frequency_input.text().strip(),
@@ -216,10 +235,25 @@ class LoggingDialog(QDialog):
                 qth=self.qth_input.text().strip() or None,
                 state=self.state_input.text().strip().upper() or None,
                 comment=self.comment_input.toPlainText().strip() or None,
-                my_gridsquare=self.my_grid_input.text().strip().upper() or None,
                 band=QSO.frequency_to_band(self.frequency_input.text().strip()),
                 sig="POTA" if self.park_input.text().strip() else None,
-                sig_info=self.park_input.text().strip().upper() or None
+                sig_info=self.park_input.text().strip().upper() or None,
+                # My station information from settings
+                my_callsign=my_callsign,
+                operator=operator,
+                my_gridsquare=my_gridsquare,
+                my_city=my_city,
+                my_state=my_state,
+                my_county=my_county,
+                my_country=my_country,
+                my_dxcc=my_dxcc,
+                my_lat=my_lat,
+                my_lon=my_lon,
+                my_postal_code=my_postal_code,
+                my_street=my_street,
+                my_rig=my_rig,
+                tx_pwr=tx_pwr,
+                ant_az=ant_az
             )
 
             # Save to database
