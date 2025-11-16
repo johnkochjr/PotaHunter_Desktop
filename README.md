@@ -66,6 +66,8 @@ pip install -r requirements.txt
 
 ## Running the Application
 
+### Option 1: Run from Source
+
 From the project root directory:
 
 ```bash
@@ -81,6 +83,25 @@ venv\Scripts\python.exe run.py
 # On macOS/Linux:
 ./venv/bin/python run.py
 ```
+
+### Option 2: Build Standalone Executable
+
+You can build a standalone executable that doesn't require Python to be installed:
+
+```bash
+# On macOS/Linux:
+./build_executable.sh
+
+# On Windows:
+build_executable.bat
+```
+
+After building:
+- **macOS**: Run `dist/PotaHunter.app`
+- **Windows**: Run `dist\PotaHunter\PotaHunter.exe`
+- **Linux**: Run `dist/PotaHunter/PotaHunter`
+
+See [BUILD.md](BUILD.md) for detailed build instructions and distribution options.
 
 ## Usage
 
