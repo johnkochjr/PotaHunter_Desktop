@@ -18,8 +18,17 @@ A cross-platform desktop application for Parks on the Air (POTA) spotting and lo
 - **Auto-prefill Names**: Operator names automatically filled in logging dialog
 - **QRZ Logbook Upload**: Upload QSOs to QRZ Logbook with bulk or automatic upload options
 
+### CAT Control (Radio Control)
+- **Direct Radio Integration**: Control your transceiver via CAT protocol
+- **Supported Protocols**: Kenwood, Yaesu, Icom CI-V, and generic variants
+- **Frequency Sync**: Automatically sync frequency and mode from your radio
+- **Real-time Monitoring**: Display current frequency and mode in main window
+- **Quick Logging**: One-click frequency/mode sync in logging dialog
+- **Wide Radio Support**: Pre-configured settings for popular models (TS-890, FT-991, IC-7300, etc.)
+
 ### Logging & Logbook
 - **Quick Logging**: Pre-filled logging dialog with spot data and QRZ information
+- **CAT Sync**: One-click button to sync frequency and mode from your radio
 - **Auto-Upload**: Optional automatic upload to QRZ Logbook when saving QSOs
 - **Logbook Viewer**: View all logged QSOs in a sortable, searchable table with band display
 - **Edit Contacts**: Double-click any QSO to edit all fields
@@ -180,6 +189,57 @@ See [BUILD.md](BUILD.md) for detailed build instructions and distribution option
 
 **Note**: The auto-upload checkbox is only enabled when you have a valid API key configured.
 
+### CAT Control Setup
+
+CAT (Computer Aided Transceiver) control allows POTA Hunter to communicate directly with your radio to read and set frequency and mode.
+
+#### Supported Radios
+
+The following radio models have pre-configured CAT settings:
+
+**Kenwood**
+- TS-480, TS-590, TS-890
+- Generic Kenwood (for other models)
+
+**Yaesu**
+- FT-450, FT-891, FT-991, FT-DX10
+- Generic Yaesu (for other models)
+
+**Icom**
+- IC-7300, IC-705, IC-9700
+- Generic Icom (for other models)
+
+#### Configuration Steps
+
+1. **Connect Your Radio**:
+   - Connect your radio to your computer via USB or serial cable
+   - Install any required USB drivers from your radio manufacturer
+   - Most modern radios appear as virtual COM ports (COMx on Windows, /dev/ttyUSB0 on Linux)
+
+2. **Configure CAT Settings**:
+   - Go to Tools → Settings → CAT Control tab
+   - Select your radio model from the dropdown
+   - Select the COM port your radio is connected to
+   - (Optional) Override baud rate if needed (usually auto-detected)
+   - Check "Enable CAT control"
+   - Click "Test Connection" to verify communication
+   - Click "Save" to apply settings
+
+3. **Using CAT Control**:
+   - Once connected, you'll see "CAT: Connected" and current frequency in the main window
+   - When logging a contact, click "Sync from Radio" to automatically fill frequency and mode
+   - The app continuously monitors your radio for frequency/mode changes
+
+#### Troubleshooting CAT Connection
+
+- **No COM ports shown**: Install USB drivers for your radio
+- **Connection fails**:
+  - Check radio CAT interface is enabled in radio settings
+  - Verify baud rate matches radio configuration
+  - Try different COM ports if multiple are available
+  - Ensure no other software is using the COM port
+- **Custom baud rate**: If your radio uses a non-standard baud rate, enter it manually
+
 ## Project Structure
 
 ```
@@ -200,7 +260,8 @@ PotaHunter/
 │       │   ├── __init__.py
 │       │   ├── pota_api.py      # POTA API integration
 │       │   ├── qrz_api.py       # QRZ XML API integration
-│       │   └── qrz_upload.py    # QRZ Logbook upload service
+│       │   ├── qrz_upload.py    # QRZ Logbook upload service
+│       │   └── cat_service.py   # CAT control service
 │       ├── models/              # Data models
 │       │   ├── __init__.py
 │       │   ├── qso.py           # QSO data model
@@ -258,6 +319,8 @@ pylint src/potahunter/
 - [x] QRZ Logbook upload with bulk and auto-upload
 - [x] Automatic band calculation from frequency
 - [x] Upload tracking and visual indicators
+- [x] CAT control for radio integration (Kenwood, Yaesu, Icom)
+- [x] Frequency and mode sync from radio
 - [ ] Grid square calculation from park location
 - [ ] LoTW upload via TQSL
 - [ ] Duplicate contact checking

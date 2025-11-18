@@ -61,20 +61,14 @@ class QRZAPIService:
             response = self.http_session.get(self.BASE_URL, params=params, timeout=10)
             response.raise_for_status()
             
-            logger.debug(f"QRZ response status: {response.status_code}")
-            logger.debug(f"QRZ response content: {response.text[:500]}")  # Log first 500 chars
-
-            logger.debug(f"Content length: {len(response.content)}")
             root = ET.fromstring(response.content)
-            logger.debug(f"Root tag: {root.tag}")
-
+            
             # QRZ XML has a namespace, need to handle it
             # Extract namespace from root tag
             namespace = ''
             if '}' in root.tag:
                 namespace = root.tag.split('}')[0] + '}'
 
-            logger.debug(f"Namespace: {namespace}")
 
             # Check for session errors
             session = root.find(f'{namespace}Session')
@@ -86,13 +80,11 @@ class QRZAPIService:
 
                 # Log session info for debugging
                 key = session.find(f'{namespace}Key')
-                if key is not None:
-                    logger.info(f"QRZ session established: {key.text[:10]}...")
+                
 
             # Parse callsign data
             callsign_data = root.find(f'{namespace}Callsign')
             if callsign_data is not None:
-                logger.info(f"Successfully retrieved info for {callsign}")
                 return self._parse_callsign_data(callsign_data, namespace)
 
             logger.warning(f"No callsign data found for {callsign}")
@@ -118,7 +110,6 @@ class QRZAPIService:
             return False
 
         try:
-            logger.info(f"Testing authentication for user: {self.username}")
 
             # Just lookup a known callsign to test credentials
             params = {
@@ -130,8 +121,6 @@ class QRZAPIService:
             response = self.http_session.get(self.BASE_URL, params=params, timeout=10)
             response.raise_for_status()
 
-            logger.debug(f"QRZ Auth Response: {response.text[:500]}")
-
             root = ET.fromstring(response.content)
 
             # Extract namespace from root tag
@@ -139,10 +128,8 @@ class QRZAPIService:
             if '}' in root.tag:
                 namespace = root.tag.split('}')[0] + '}'
 
-            logger.debug(f"Auth namespace: {namespace}")
 
             session = root.find(f'{namespace}Session')
-            logger.debug(f"Session element found: {session is not None}")
             if session is not None:
                 error = session.find(f'{namespace}Error')
                 if error is not None:
@@ -151,7 +138,6 @@ class QRZAPIService:
 
                 key = session.find(f'{namespace}Key')
                 if key is not None:
-                    logger.info("QRZ authentication successful")
                     return True
 
             return False

@@ -20,11 +20,12 @@ class LoggingDialog(QDialog):
     # Common amateur radio modes
     MODES = ["SSB", "CW", "FM", "AM", "RTTY", "PSK31", "FT8", "FT4", "JS8"]
 
-    def __init__(self, spot_data: dict, parent=None):
+    def __init__(self, spot_data: dict, parent=None, cat_service=None):
         super().__init__(parent)
         self.spot_data = spot_data
         self.db_manager = DatabaseManager()
         self.settings = QSettings()
+        self.cat_service = cat_service
         self.init_ui()
         self.prefill_data()
 
@@ -50,9 +51,16 @@ class LoggingDialog(QDialog):
         form_layout.addRow("Callsign:", self.callsign_input)
 
         # Frequency (required)
+        freq_layout = QHBoxLayout()
         self.frequency_input = QLineEdit()
         self.frequency_input.setPlaceholderText("e.g., 14.260")
-        form_layout.addRow("Frequency (MHz):", self.frequency_input)
+        freq_layout.addWidget(self.frequency_input)
+
+        # Add button to sync frequency from CAT
+        self.sync_freq_button = QPushButton("Sync from Radio")
+        self.sync_freq_button.clicked.connect(self.sync_from_cat)
+        freq_layout.addWidget(self.sync_freq_button)
+        form_layout.addRow("Frequency (MHz):", freq_layout)
 
         # Mode (required)
         self.mode_combo = QComboBox()
@@ -173,6 +181,42 @@ class LoggingDialog(QDialog):
         my_gridsquare = self.settings.value("station/my_gridsquare", "")
         if my_gridsquare:
             self.my_grid_input.setText(my_gridsquare)
+
+        # Enable/disable sync button based on CAT availability
+        if self.cat_service and self.cat_service.is_connected:
+            self.sync_freq_button.setEnabled(True)
+        else:
+            self.sync_freq_button.setEnabled(False)
+            self.sync_freq_button.setToolTip("CAT control not connected")
+
+    def sync_from_cat(self):
+        """Sync frequency and mode from CAT control"""
+        if not self.cat_service or not self.cat_service.is_connected:
+            QMessageBox.warning(
+                self,
+                "CAT Not Connected",
+                "CAT control is not connected. Please configure and connect your radio in Settings."
+            )
+            return
+
+        # Get frequency from radio
+        freq = self.cat_service.get_frequency()
+        if freq:
+            freq_mhz = freq / 1_000_000
+            self.frequency_input.setText(f"{freq_mhz:.6f}")
+
+        # Get mode from radio
+        mode = self.cat_service.get_mode()
+        if mode:
+            # Map mode to logging dialog modes
+            mode_upper = mode.upper()
+            # Try to find exact match first
+            index = self.mode_combo.findText(mode_upper)
+            if index >= 0:
+                self.mode_combo.setCurrentIndex(index)
+            else:
+                # Try to set as text (will add to combo if editable)
+                self.mode_combo.setEditText(mode_upper)
 
     def save_qso(self):
         """Validate and save the QSO"""

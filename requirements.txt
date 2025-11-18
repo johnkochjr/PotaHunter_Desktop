@@ -16,6 +16,9 @@ maidenhead>=1.7.0
 # Data Handling
 pandas>=2.1.0
 
+# Serial Communication for CAT Control
+pyserial>=3.5
+
 # Development Dependencies
 pytest>=7.4.0
 black>=23.0.0

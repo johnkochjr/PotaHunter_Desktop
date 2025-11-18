@@ -14,6 +14,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkRe
 
 from potahunter.services.pota_api import PotaAPIService
 from potahunter.services.qrz_api import QRZAPIService
+from potahunter.services.cat_service import CATService
 from potahunter.ui.logging_dialog import LoggingDialog
 from potahunter.ui.settings_dialog import SettingsDialog
 from potahunter.ui.logbook_viewer import LogbookViewer
@@ -41,6 +42,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.pota_service = PotaAPIService()
         self.qrz_service = QRZAPIService()
+        self.cat_service = CATService()
         self.all_spots = []  # Store all spots for filtering
         self.settings = QSettings()
         self.network_manager = QNetworkAccessManager()
@@ -49,6 +51,15 @@ class MainWindow(QMainWindow):
         self.load_qrz_credentials()
         self.init_ui()
         self.setup_refresh_timer()
+        self.refresh_spots()
+
+        # Connect CAT service signals
+        self.cat_service.frequency_changed.connect(self.on_cat_frequency_changed)
+        self.cat_service.mode_changed.connect(self.on_cat_mode_changed)
+        self.cat_service.connection_status_changed.connect(self.on_cat_connection_status_changed)
+
+        # Load CAT settings after UI is initialized (so status_bar exists)
+        self.load_cat_settings()
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -116,6 +127,15 @@ class MainWindow(QMainWindow):
         self.auto_refresh_button.setChecked(True)
         self.auto_refresh_button.clicked.connect(self.toggle_auto_refresh)
         button_layout.addWidget(self.auto_refresh_button)
+
+        # CAT status indicator
+        self.cat_status_label = QLabel("CAT: Disconnected")
+        self.cat_status_label.setStyleSheet("color: gray; padding: 5px;")
+        button_layout.addWidget(self.cat_status_label)
+
+        self.cat_freq_label = QLabel("")
+        self.cat_freq_label.setStyleSheet("padding: 5px; font-weight: bold;")
+        button_layout.addWidget(self.cat_freq_label)
 
         button_layout.addStretch()
 
@@ -431,7 +451,7 @@ class MainWindow(QMainWindow):
             if first_name or last_name:
                 spot_data['name'] = f"{first_name} {last_name}".strip()
 
-        dialog = LoggingDialog(spot_data, self)
+        dialog = LoggingDialog(spot_data, self, self.cat_service)
         dialog.exec()
 
     def export_log(self):
@@ -577,6 +597,15 @@ class MainWindow(QMainWindow):
         }
         dialog.set_station_info(station_info)
 
+        # Load current CAT settings
+        cat_settings = {
+            'cat_enabled': self.settings.value("cat/enabled", False, type=bool),
+            'cat_radio_model': self.settings.value("cat/radio_model", ""),
+            'cat_com_port': self.settings.value("cat/com_port", ""),
+            'cat_baud_rate': self.settings.value("cat/baud_rate", None, type=int),
+        }
+        dialog.set_cat_settings(cat_settings)
+
         if dialog.exec():
             # Save QRZ credentials
             username, password = dialog.get_qrz_credentials()
@@ -592,8 +621,37 @@ class MainWindow(QMainWindow):
             for key, value in station_info.items():
                 self.settings.setValue(f"station/{key}", value)
 
+            # Save CAT settings
+            cat_settings = dialog.get_cat_settings()
+            old_enabled = self.settings.value("cat/enabled", False, type=bool)
+            for key, value in cat_settings.items():
+                # Convert cat_enabled to cat/enabled format
+                settings_key = f"cat/{key.replace('cat_', '')}"
+                if value is None:
+                    self.settings.remove(settings_key)
+                else:
+                    self.settings.setValue(settings_key, value)
+
             # Update QRZ service
             self.qrz_service.set_credentials(username, password)
+
+            # Update CAT service
+            new_enabled = cat_settings.get('cat_enabled', False)
+            if old_enabled and not new_enabled:
+                # Disconnect if disabled
+                self.cat_service.disconnect()
+            elif new_enabled:
+                # Disconnect and reconnect with new settings
+                self.cat_service.disconnect()
+                radio_model = cat_settings.get('cat_radio_model', '')
+                com_port = cat_settings.get('cat_com_port', '')
+                baud_rate = cat_settings.get('cat_baud_rate')
+
+                if radio_model and com_port:
+                    if self.cat_service.connect(com_port, radio_model, baud_rate):
+                        self.status_bar.showMessage(f"Connected to {radio_model} on {com_port}", 5000)
+                    else:
+                        self.status_bar.showMessage(f"Failed to connect to radio on {com_port}", 5000)
 
             self.status_bar.showMessage("Settings saved", 3000)
 
@@ -750,9 +808,42 @@ class MainWindow(QMainWindow):
         if username and password:
             self.qrz_service.set_credentials(username, password)
 
+    def load_cat_settings(self):
+        """Load CAT settings from settings and connect if enabled"""
+        cat_enabled = self.settings.value("cat/enabled", False, type=bool)
+        radio_model = self.settings.value("cat/radio_model", "")
+        com_port = self.settings.value("cat/com_port", "")
+        baud_rate = self.settings.value("cat/baud_rate", None, type=int)
+
+        if cat_enabled and radio_model and com_port:
+            if self.cat_service.connect(com_port, radio_model, baud_rate):
+                self.status_bar.showMessage(f"Connected to {radio_model} on {com_port}", 5000)
+            else:
+                self.status_bar.showMessage(f"Failed to connect to radio on {com_port}", 5000)
+
+    def on_cat_frequency_changed(self, frequency):
+        """Handle frequency change from CAT"""
+        freq_mhz = frequency / 1_000_000
+        self.cat_freq_label.setText(f"{freq_mhz:.4f} MHz")
+
+    def on_cat_mode_changed(self, mode):
+        """Handle mode change from CAT"""
+        # Update display if needed
+        pass
+
+    def on_cat_connection_status_changed(self, connected):
+        """Handle CAT connection status change"""
+        if connected:
+            self.cat_status_label.setText("CAT: Connected")
+            self.cat_status_label.setStyleSheet("color: green; padding: 5px; font-weight: bold;")
+        else:
+            self.cat_status_label.setText("CAT: Disconnected")
+            self.cat_status_label.setStyleSheet("color: gray; padding: 5px;")
+            self.cat_freq_label.setText("")
+
     def on_row_selection_changed(self, current, previous):
         """
-        Handle row selection change - lookup callsign info from QRZ
+        Handle row selection change - lookup callsign info from QRZ and tune radio
 
         Args:
             current: Currently selected item
@@ -765,6 +856,33 @@ class MainWindow(QMainWindow):
         row = current.row()
         if row < 0:
             return
+
+        # Tune radio to spot frequency if CAT is connected
+        if self.cat_service.is_connected:
+            freq_item = self.spots_table.item(row, 2)  # Column 2 is frequency
+            if freq_item:
+                try:
+                    freq_str = freq_item.text().strip()
+                    print(f"DEBUG: Raw frequency string from table: '{freq_str}'")
+
+                    # Parse frequency - API returns it in kHz (e.g., "14046" for 14.046 MHz)
+                    freq_khz = float(freq_str)
+                    print(f"DEBUG: Parsed as kHz: {freq_khz}")
+
+                    # Convert kHz to Hz
+                    freq_hz = freq_khz * 1_000
+                    freq_mhz = freq_khz / 1_000
+                    print(f"DEBUG: Converted to Hz: {freq_hz} ({freq_mhz} MHz)")
+
+                    # Set radio frequency
+                    if self.cat_service.set_frequency(freq_hz):
+                        self.status_bar.showMessage(f"Tuned radio to {freq_mhz:.3f} MHz", 2000)
+                        print(f"DEBUG: Successfully tuned to {freq_mhz} MHz")
+                    else:
+                        print(f"DEBUG: Failed to tune to {freq_mhz} MHz")
+                except (ValueError, AttributeError) as e:
+                    print(f"DEBUG: Error tuning radio: {e}")
+                    pass  # Silently ignore tuning errors
 
         # Get callsign from the table
         callsign_item = self.spots_table.item(row, 1)  # Column 1 is callsign

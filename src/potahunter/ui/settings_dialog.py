@@ -4,7 +4,7 @@ Settings dialog for POTA Hunter application
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit,
-    QPushButton, QHBoxLayout, QLabel, QTabWidget, QWidget, QCheckBox
+    QPushButton, QHBoxLayout, QLabel, QTabWidget, QWidget, QCheckBox, QComboBox
 )
 from PySide6.QtCore import Qt
 
@@ -221,6 +221,105 @@ class SettingsDialog(QDialog):
         station_layout.addStretch()
         tabs.addTab(station_tab, "Station Info")
 
+        # CAT Control Tab
+        cat_tab = QWidget()
+        cat_layout = QVBoxLayout(cat_tab)
+
+        cat_info = QLabel(
+            "Configure CAT (Computer Aided Transceiver) control to sync frequency "
+            "and mode with your radio."
+        )
+        cat_info.setWordWrap(True)
+        cat_layout.addWidget(cat_info)
+        cat_layout.addSpacing(10)
+
+        cat_form = QFormLayout()
+
+        # Radio model selection
+        self.cat_radio_model = QComboBox()
+        self.cat_radio_model.addItem("(None - Disabled)", "")
+        # Import here to avoid circular dependencies
+        from potahunter.services.cat_service import CATService
+        for model in CATService.get_radio_models():
+            self.cat_radio_model.addItem(model, model)
+        cat_form.addRow("Radio Model:", self.cat_radio_model)
+
+        # COM port selection
+        self.cat_com_port = QComboBox()
+        self.cat_com_port.setEditable(True)
+        self.cat_com_port.addItem("(Select Port)", "")
+        # Populate with available ports
+        self._refresh_com_ports()
+        cat_form.addRow("COM Port:", self.cat_com_port)
+
+        # Refresh ports button
+        refresh_ports_layout = QHBoxLayout()
+        self.refresh_ports_button = QPushButton("Refresh Ports")
+        self.refresh_ports_button.clicked.connect(self._refresh_com_ports)
+        refresh_ports_layout.addWidget(self.refresh_ports_button)
+        refresh_ports_layout.addStretch()
+        cat_layout.addLayout(refresh_ports_layout)
+
+        # Baud rate (dropdown with common values)
+        baud_layout = QHBoxLayout()
+        self.cat_baud_rate = QComboBox()
+        self.cat_baud_rate.setEditable(True)
+        self.cat_baud_rate.addItems([
+            "Auto (radio default)",
+            "4800",
+            "9600",
+            "19200",
+            "38400",
+            "57600",
+            "115200"
+        ])
+        baud_layout.addWidget(self.cat_baud_rate)
+
+        self.detect_baud_button = QPushButton("Auto-Detect")
+        self.detect_baud_button.clicked.connect(self.detect_baud_rate)
+        baud_layout.addWidget(self.detect_baud_button)
+
+        cat_form.addRow("Baud Rate:", baud_layout)
+
+        cat_layout.addLayout(cat_form)
+        cat_layout.addSpacing(10)
+
+        # Enable CAT control checkbox
+        self.cat_enabled = QCheckBox("Enable CAT control")
+        cat_layout.addWidget(self.cat_enabled)
+
+        cat_layout.addSpacing(10)
+
+        # Test connection button
+        test_cat_layout = QHBoxLayout()
+        self.test_cat_button = QPushButton("Test Connection")
+        self.test_cat_button.clicked.connect(self.test_cat_connection)
+        test_cat_layout.addWidget(self.test_cat_button)
+        test_cat_layout.addStretch()
+        cat_layout.addLayout(test_cat_layout)
+
+        # Status label for test results
+        self.cat_test_result = QLabel("")
+        self.cat_test_result.setWordWrap(True)
+        cat_layout.addWidget(self.cat_test_result)
+
+        cat_layout.addSpacing(10)
+
+        # Information about CAT control
+        cat_help = QLabel(
+            "<b>Notes:</b><br>"
+            "• Ensure your radio's CAT/USB interface is properly configured<br>"
+            "• Most modern radios use USB virtual COM ports<br>"
+            "• Baud rate is usually set automatically based on radio model<br>"
+            "• You may need to install USB drivers for your radio"
+        )
+        cat_help.setWordWrap(True)
+        cat_help.setStyleSheet("font-size: 11px; color: gray;")
+        cat_layout.addWidget(cat_help)
+
+        cat_layout.addStretch()
+        tabs.addTab(cat_tab, "CAT Control")
+
         layout.addWidget(tabs)
 
         # Buttons
@@ -374,3 +473,187 @@ class SettingsDialog(QDialog):
         self.my_rig.setText(info.get('my_rig', ''))
         self.tx_pwr.setText(info.get('tx_pwr', ''))
         self.ant_az.setText(info.get('ant_az', ''))
+
+    # CAT Control methods
+    def _refresh_com_ports(self):
+        """Refresh the list of available COM ports"""
+        from potahunter.services.cat_service import CATService
+
+        current_port = self.cat_com_port.currentText()
+        self.cat_com_port.clear()
+        self.cat_com_port.addItem("(Select Port)", "")
+
+        ports = CATService.get_available_ports()
+        for port in ports:
+            self.cat_com_port.addItem(port, port)
+
+        # Restore previous selection if it still exists
+        index = self.cat_com_port.findText(current_port)
+        if index >= 0:
+            self.cat_com_port.setCurrentIndex(index)
+
+    def detect_baud_rate(self):
+        """Auto-detect the correct baud rate for the selected radio"""
+        from potahunter.services.cat_service import CATService
+
+        radio_model = self.cat_radio_model.currentData()
+        com_port = self.cat_com_port.currentText()
+
+        if not radio_model:
+            self.cat_test_result.setText(
+                "<span style='color: orange;'>⚠️ Please select a radio model first</span>"
+            )
+            return
+
+        if not com_port or com_port == "(Select Port)":
+            self.cat_test_result.setText(
+                "<span style='color: orange;'>⚠️ Please select a COM port first</span>"
+            )
+            return
+
+        self.cat_test_result.setText("<i>Auto-detecting baud rate...</i>")
+        self.detect_baud_button.setEnabled(False)
+        self.test_cat_button.setEnabled(False)
+
+        # Run detection
+        detected_baud = CATService.detect_baud_rate(com_port, radio_model)
+
+        if detected_baud:
+            # Set the detected baud rate in the combo box
+            self.cat_baud_rate.setCurrentText(str(detected_baud))
+            self.cat_test_result.setText(
+                f"<span style='color: green;'>✓ Detected baud rate: {detected_baud}</span>"
+            )
+        else:
+            self.cat_test_result.setText(
+                "<span style='color: orange;'>⚠️ Could not auto-detect baud rate. "
+                "Try entering it manually or check radio connection.</span>"
+            )
+
+        self.detect_baud_button.setEnabled(True)
+        self.test_cat_button.setEnabled(True)
+
+    def test_cat_connection(self):
+        """Test CAT connection to radio"""
+        from potahunter.services.cat_service import CATService
+
+        radio_model = self.cat_radio_model.currentData()
+        com_port = self.cat_com_port.currentText()
+        baud_rate_str = self.cat_baud_rate.currentText().strip()
+
+        if not radio_model:
+            self.cat_test_result.setText(
+                "<span style='color: orange;'>⚠️ Please select a radio model</span>"
+            )
+            return
+
+        if not com_port or com_port == "(Select Port)":
+            self.cat_test_result.setText(
+                "<span style='color: orange;'>⚠️ Please select a COM port</span>"
+            )
+            return
+
+        self.cat_test_result.setText("<i>Testing connection...</i>")
+        self.test_cat_button.setEnabled(False)
+
+        # Parse custom baud rate if provided (skip "Auto" option)
+        custom_baud = None
+        if baud_rate_str and not baud_rate_str.startswith("Auto"):
+            try:
+                custom_baud = int(baud_rate_str)
+            except ValueError:
+                self.cat_test_result.setText(
+                    "<span style='color: red;'>✗ Invalid baud rate</span>"
+                )
+                self.test_cat_button.setEnabled(True)
+                return
+
+        # Test connection
+        cat = CATService()
+
+        # Try to connect
+        try:
+            if cat.connect(com_port, radio_model, custom_baud):
+                freq = cat.get_frequency()
+                mode = cat.get_mode()
+                cat.disconnect()
+
+                freq_mhz = freq / 1_000_000 if freq else 0
+                self.cat_test_result.setText(
+                    f"<span style='color: green;'>✓ Connection successful!<br>"
+                    f"Frequency: {freq_mhz:.6f} MHz<br>"
+                    f"Mode: {mode}</span>"
+                )
+            else:
+                # Connection failed - provide more details
+                radio_config = CATService.RADIO_MODELS.get(radio_model, {})
+                protocol = radio_config.get('protocol', 'unknown')
+                baud = custom_baud if custom_baud else radio_config.get('baud', 'unknown')
+
+                self.cat_test_result.setText(
+                    f"<span style='color: red;'>✗ Connection failed<br>"
+                    f"Protocol: {protocol}<br>"
+                    f"Baud rate: {baud}<br><br>"
+                    f"Possible issues:<br>"
+                    f"• Radio not responding to commands<br>"
+                    f"• Wrong baud rate (check radio settings)<br>"
+                    f"• CAT interface disabled in radio menu<br>"
+                    f"• Wrong radio model selected</span>"
+                )
+        except Exception as e:
+            self.cat_test_result.setText(
+                f"<span style='color: red;'>✗ Error: {str(e)}</span>"
+            )
+
+        self.test_cat_button.setEnabled(True)
+
+    def get_cat_settings(self):
+        """Get CAT control settings as dictionary"""
+        baud_str = self.cat_baud_rate.currentText().strip()
+        # Parse baud rate, ignoring "Auto" option
+        baud_rate = None
+        if baud_str and not baud_str.startswith("Auto"):
+            try:
+                baud_rate = int(baud_str)
+            except ValueError:
+                baud_rate = None
+
+        return {
+            'cat_enabled': self.cat_enabled.isChecked(),
+            'cat_radio_model': self.cat_radio_model.currentData(),
+            'cat_com_port': self.cat_com_port.currentText(),
+            'cat_baud_rate': baud_rate,
+        }
+
+    def set_cat_settings(self, settings):
+        """Set CAT control settings from dictionary"""
+        self.cat_enabled.setChecked(settings.get('cat_enabled', False))
+
+        # Set radio model
+        radio_model = settings.get('cat_radio_model', '')
+        index = self.cat_radio_model.findData(radio_model)
+        if index >= 0:
+            self.cat_radio_model.setCurrentIndex(index)
+
+        # Set COM port
+        com_port = settings.get('cat_com_port', '')
+        if com_port:
+            index = self.cat_com_port.findText(com_port)
+            if index >= 0:
+                self.cat_com_port.setCurrentIndex(index)
+            else:
+                self.cat_com_port.setEditText(com_port)
+
+        # Set baud rate
+        baud_rate = settings.get('cat_baud_rate')
+        if baud_rate:
+            # Try to find the baud rate in the combo box
+            index = self.cat_baud_rate.findText(str(baud_rate))
+            if index >= 0:
+                self.cat_baud_rate.setCurrentIndex(index)
+            else:
+                # If not found, set it as custom text
+                self.cat_baud_rate.setCurrentText(str(baud_rate))
+        else:
+            # Default to "Auto"
+            self.cat_baud_rate.setCurrentIndex(0)
