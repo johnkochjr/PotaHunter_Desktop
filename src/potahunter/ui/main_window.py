@@ -44,7 +44,9 @@ class MainWindow(QMainWindow):
         self.pota_service = PotaAPIService()
         self.qrz_service = QRZAPIService()
         self.cat_service = CATService()
+        self.db_manager = DatabaseManager()
         self.all_spots = []  # Store all spots for filtering
+        self.all_qsos = []  # Store all QSOs for filtering
         self.settings = QSettings()
         self.network_manager = QNetworkAccessManager()
         self.network_manager.finished.connect(self.on_image_downloaded)
@@ -53,6 +55,7 @@ class MainWindow(QMainWindow):
         self.init_ui()
         self.setup_refresh_timer()
         self.refresh_spots()
+        self.refresh_logbook()  # Load logbook on startup
 
         # Connect CAT service signals
         self.cat_service.frequency_changed.connect(self.on_cat_frequency_changed)
@@ -65,7 +68,7 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle("POTA Hunter - Spots & Logging")
-        self.setGeometry(100, 100, 1200, 700)
+        self.setGeometry(100, 100, 1400, 900)  # Increased size for logbook section
 
         # Create menu bar
         self.create_menus()
@@ -178,10 +181,21 @@ class MainWindow(QMainWindow):
         legend_layout.addStretch()
         layout.addLayout(legend_layout)
 
-        # Create splitter for table and details panel
-        splitter = QSplitter(Qt.Horizontal)
+        # Create main horizontal splitter for POTA spots/logbook and details panel
+        main_splitter = QSplitter(Qt.Horizontal)
 
-        # Spots table
+        # Create left side vertical splitter for POTA spots and logbook
+        left_splitter = QSplitter(Qt.Vertical)
+
+        # POTA Spots table section
+        spots_widget = QWidget()
+        spots_layout = QVBoxLayout(spots_widget)
+        spots_layout.setContentsMargins(0, 0, 0, 0)
+
+        spots_label = QLabel("POTA Spots")
+        spots_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        spots_layout.addWidget(spots_label)
+
         self.spots_table = QTableWidget()
         self.spots_table.setColumnCount(7)
         self.spots_table.setHorizontalHeaderLabels([
@@ -201,10 +215,77 @@ class MainWindow(QMainWindow):
         # Double-click handler - different actions based on column
         self.spots_table.doubleClicked.connect(self.handle_table_double_click)
 
-        # Single-click handler - lookup callsign info
+        # Single-click handler - lookup callsign info and filter logbook
         self.spots_table.currentItemChanged.connect(self.on_row_selection_changed)
 
-        splitter.addWidget(self.spots_table)
+        spots_layout.addWidget(self.spots_table)
+        left_splitter.addWidget(spots_widget)
+
+        # Logbook section
+        logbook_widget = QWidget()
+        logbook_layout = QVBoxLayout(logbook_widget)
+        logbook_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Logbook header with filter dropdown
+        logbook_header_layout = QHBoxLayout()
+        logbook_label = QLabel("Logbook")
+        logbook_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        logbook_header_layout.addWidget(logbook_label)
+
+        self.logbook_count_label = QLabel("0 QSOs")
+        self.logbook_count_label.setStyleSheet("color: gray; font-size: 11px;")
+        logbook_header_layout.addWidget(self.logbook_count_label)
+
+        logbook_header_layout.addSpacing(20)
+        logbook_header_layout.addWidget(QLabel("Auto-Filter:"))
+
+        self.logbook_filter_combo = QComboBox()
+        self.logbook_filter_combo.addItems(["None", "Callsign", "Park"])
+        self.logbook_filter_combo.setToolTip("Automatically filter logbook when clicking POTA spots")
+        self.logbook_filter_combo.currentTextChanged.connect(self.on_logbook_filter_changed)
+        logbook_header_layout.addWidget(self.logbook_filter_combo)
+
+        logbook_header_layout.addStretch()
+
+        # Refresh logbook button
+        self.refresh_logbook_button = QPushButton("Refresh Logbook")
+        self.refresh_logbook_button.clicked.connect(self.refresh_logbook)
+        logbook_header_layout.addWidget(self.refresh_logbook_button)
+
+        logbook_layout.addLayout(logbook_header_layout)
+
+        # Logbook table
+        self.logbook_table = QTableWidget()
+        self.logbook_table.setColumnCount(13)
+        self.logbook_table.setHorizontalHeaderLabels([
+            "Date", "Time", "Callsign", "Frequency", "Mode", "Band",
+            "RST Sent", "RST Rcvd", "Park", "Name", "QTH", "State", "Comment"
+        ])
+
+        # Enable sorting
+        self.logbook_table.setSortingEnabled(True)
+
+        # Resize columns
+        logbook_header = self.logbook_table.horizontalHeader()
+        logbook_header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        logbook_header.setSectionResizeMode(2, QHeaderView.Stretch)  # Callsign
+        logbook_header.setSectionResizeMode(9, QHeaderView.Stretch)  # Name
+        logbook_header.setSectionResizeMode(12, QHeaderView.Stretch)  # Comment
+
+        # Allow selection of full rows
+        self.logbook_table.setSelectionBehavior(QTableWidget.SelectRows)
+
+        # Double-click to edit (opens full logbook viewer)
+        self.logbook_table.doubleClicked.connect(self.open_logbook)
+
+        logbook_layout.addWidget(self.logbook_table)
+
+        left_splitter.addWidget(logbook_widget)
+
+        # Set initial sizes for vertical splitter (60% POTA spots, 40% logbook)
+        left_splitter.setSizes([600, 400])
+
+        main_splitter.addWidget(left_splitter)
 
         # Details panel on the right
         details_widget = QWidget()
@@ -234,12 +315,12 @@ class MainWindow(QMainWindow):
         details_layout.addWidget(callsign_group)
         details_layout.addStretch()
 
-        splitter.addWidget(details_widget)
+        main_splitter.addWidget(details_widget)
 
         # Set initial splitter sizes (70% table, 30% details)
-        splitter.setSizes([700, 300])
+        main_splitter.setSizes([700, 300])
 
-        layout.addWidget(splitter)
+        layout.addWidget(main_splitter)
 
         # Status bar
         self.status_bar = QStatusBar()
@@ -453,7 +534,9 @@ class MainWindow(QMainWindow):
                 spot_data['name'] = f"{first_name} {last_name}".strip()
 
         dialog = LoggingDialog(spot_data, self, self.cat_service)
-        dialog.exec()
+        if dialog.exec():
+            # Refresh logbook after saving a QSO
+            self.refresh_logbook()
 
     def export_log(self):
         """Export log to ADIF file"""
@@ -559,9 +642,127 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             self.status_bar.showMessage("Upload completed", 3000)
 
+    def refresh_logbook(self):
+        """Refresh logbook from database"""
+        try:
+            # Get all QSOs from database
+            self.all_qsos = self.db_manager.get_all_qsos()
+
+            # Apply current filter
+            self.filter_logbook()
+
+            self.status_bar.showMessage(f"Loaded {len(self.all_qsos)} QSOs", 2000)
+        except Exception as e:
+            self.status_bar.showMessage(f"Error loading logbook: {str(e)}", 5000)
+            logging.error(f"Error refreshing logbook: {e}")
+
+    def filter_logbook(self, filter_text="", filter_type=""):
+        """Filter and populate logbook table
+
+        Args:
+            filter_text: Text to filter by (callsign or park)
+            filter_type: Type of filter ('Callsign', 'Park', or empty for no filter)
+        """
+        try:
+            # Filter QSOs based on filter type
+            if filter_type == "Callsign" and filter_text:
+                filtered_qsos = [qso for qso in self.all_qsos if qso.callsign.upper() == filter_text.upper()]
+            elif filter_type == "Park" and filter_text:
+                filtered_qsos = [qso for qso in self.all_qsos if qso.park_reference and qso.park_reference.upper() == filter_text.upper()]
+            else:
+                filtered_qsos = self.all_qsos
+
+            # Update table
+            self.populate_logbook_table(filtered_qsos)
+
+            # Update count label
+            if filtered_qsos != self.all_qsos:
+                self.logbook_count_label.setText(f"{len(filtered_qsos)} of {len(self.all_qsos)} QSOs")
+            else:
+                self.logbook_count_label.setText(f"{len(self.all_qsos)} QSOs")
+
+        except Exception as e:
+            logging.error(f"Error filtering logbook: {e}")
+
+    def populate_logbook_table(self, qsos):
+        """Populate logbook table with QSO data"""
+        self.logbook_table.setSortingEnabled(False)
+        self.logbook_table.setRowCount(len(qsos))
+
+        for row, qso in enumerate(qsos):
+            # Format date (YYYYMMDD -> YYYY-MM-DD)
+            date_str = qso.qso_date
+            if len(date_str) == 8:
+                formatted_date = f"{date_str[0:4]}-{date_str[4:6]}-{date_str[6:8]}"
+            else:
+                formatted_date = date_str
+
+            # Format time (HHMMSS -> HH:MM:SS or HHMM -> HH:MM)
+            time_str = qso.time_on
+            if len(time_str) == 6:
+                formatted_time = f"{time_str[0:2]}:{time_str[2:4]}:{time_str[4:6]}"
+            elif len(time_str) == 4:
+                formatted_time = f"{time_str[0:2]}:{time_str[2:4]}"
+            else:
+                formatted_time = time_str
+
+            # Populate row
+            self.logbook_table.setItem(row, 0, QTableWidgetItem(formatted_date))
+            self.logbook_table.setItem(row, 1, QTableWidgetItem(formatted_time))
+            self.logbook_table.setItem(row, 2, QTableWidgetItem(qso.callsign or ""))
+            self.logbook_table.setItem(row, 3, QTableWidgetItem(qso.frequency or ""))
+            self.logbook_table.setItem(row, 4, QTableWidgetItem(qso.mode or ""))
+            self.logbook_table.setItem(row, 5, QTableWidgetItem(qso.band or ""))
+            self.logbook_table.setItem(row, 6, QTableWidgetItem(qso.rst_sent or ""))
+            self.logbook_table.setItem(row, 7, QTableWidgetItem(qso.rst_rcvd or ""))
+            self.logbook_table.setItem(row, 8, QTableWidgetItem(qso.park_reference or ""))
+            self.logbook_table.setItem(row, 9, QTableWidgetItem(qso.name or ""))
+            self.logbook_table.setItem(row, 10, QTableWidgetItem(qso.qth or ""))
+            self.logbook_table.setItem(row, 11, QTableWidgetItem(qso.state or ""))
+            self.logbook_table.setItem(row, 12, QTableWidgetItem(qso.comment or ""))
+
+        self.logbook_table.setSortingEnabled(True)
+
+    def on_logbook_filter_changed(self):
+        """Handle logbook filter dropdown change"""
+        filter_mode = self.logbook_filter_combo.currentText()
+
+        # If filter mode is "None", show all QSOs
+        if filter_mode == "None":
+            self.filter_logbook()
+        else:
+            # If there's a selected spot, apply the filter immediately
+            current_row = self.spots_table.currentRow()
+            if current_row >= 0:
+                self.apply_logbook_filter_for_current_spot()
+
+    def apply_logbook_filter_for_current_spot(self):
+        """Apply logbook filter based on currently selected POTA spot"""
+        filter_mode = self.logbook_filter_combo.currentText()
+
+        if filter_mode == "None":
+            self.filter_logbook()
+            return
+
+        current_row = self.spots_table.currentRow()
+        if current_row < 0:
+            return
+
+        # Get the callsign and park from the selected spot
+        callsign_item = self.spots_table.item(current_row, 1)  # Callsign column
+        park_item = self.spots_table.item(current_row, 4)  # Park column
+
+        if filter_mode == "Callsign" and callsign_item:
+            filter_text = callsign_item.text()
+            self.filter_logbook(filter_text, "Callsign")
+        elif filter_mode == "Park" and park_item:
+            filter_text = park_item.text()
+            self.filter_logbook(filter_text, "Park")
+
     def open_logbook(self):
         """Open logbook viewer window"""
         logbook_window = LogbookViewer(self)
+        logbook_window.logbook_modified.connect(self.refresh_logbook)  # Refresh when logbook is modified
         logbook_window.show()
         self.status_bar.showMessage("Opened logbook viewer", 2000)
 
@@ -950,6 +1151,9 @@ class MainWindow(QMainWindow):
             )
             self.qsl_card_label.hide()
             self.status_bar.showMessage(f"Could not find info for {callsign}", 3000)
+
+        # Apply logbook filter if auto-filter is enabled
+        self.apply_logbook_filter_for_current_spot()
 
     def on_image_downloaded(self, reply: QNetworkReply):
         """
