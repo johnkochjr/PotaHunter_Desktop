@@ -49,8 +49,6 @@ class QRZAPIService:
             return None
 
         try:
-            logger.info(f"Looking up callsign: {callsign}")
-            
             # Single request with credentials and callsign
             params = {
                 'username': self.username,

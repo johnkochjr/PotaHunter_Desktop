@@ -2,6 +2,7 @@
 Main window for POTA Hunter application
 """
 
+import logging
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem,
@@ -15,7 +16,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkRe
 from potahunter.services.pota_api import PotaAPIService
 from potahunter.services.qrz_api import QRZAPIService
 from potahunter.services.cat_service import CATService
-from potahunter.ui.logging_dialog import LoggingDialog
+from potahunter.ui.logging_dialog import LoggingDialog, resolve_mode_for_radio
 from potahunter.ui.settings_dialog import SettingsDialog
 from potahunter.ui.logbook_viewer import LogbookViewer
 from potahunter.models.database import DatabaseManager
@@ -834,7 +835,8 @@ class MainWindow(QMainWindow):
     def on_cat_connection_status_changed(self, connected):
         """Handle CAT connection status change"""
         if connected:
-            self.cat_status_label.setText("CAT: Connected")
+            mode = self.cat_service.get_mode()
+            self.cat_status_label.setText(f"CAT: Connected, Mode: {mode}")
             self.cat_status_label.setStyleSheet("color: green; padding: 5px; font-weight: bold;")
         else:
             self.cat_status_label.setText("CAT: Disconnected")
@@ -875,11 +877,18 @@ class MainWindow(QMainWindow):
                     print(f"DEBUG: Converted to Hz: {freq_hz} ({freq_mhz} MHz)")
 
                     # Set radio frequency
+                    base_mode = self.spots_table.item(row, 3).text().strip()
+                    calc_mode = resolve_mode_for_radio(base_mode, freq_mhz)
+                    logging.debug(f"Tuning radio to {freq_mhz:.3f} MHz, Mode: {calc_mode}")
                     if self.cat_service.set_frequency(freq_hz):
                         self.status_bar.showMessage(f"Tuned radio to {freq_mhz:.3f} MHz", 2000)
                         print(f"DEBUG: Successfully tuned to {freq_mhz} MHz")
                     else:
                         print(f"DEBUG: Failed to tune to {freq_mhz} MHz")
+                    if self.cat_service.set_mode(calc_mode):
+                        print(f"DEBUG: Successfully set mode")
+                    else:
+                        print(f"DEBUG: Failed to set mode")
                 except (ValueError, AttributeError) as e:
                     print(f"DEBUG: Error tuning radio: {e}")
                     pass  # Silently ignore tuning errors

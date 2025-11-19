@@ -1,20 +1,63 @@
 # CAT Control Testing Guide
 
-## Recent Fixes
+## Recent Architectural Improvements
 
-I've just fixed several critical issues with the FT-DX10 CAT implementation:
+### Latest Updates
 
-1. **MAJOR: Protocol Change**: Changed FT-DX10 to use **Kenwood ASCII protocol** instead of Yaesu binary
-   - The FT-DX10 uses ASCII commands like "FA;" (Kenwood-compatible)
-   - Not the binary Yaesu protocol used by older radios
-   - Added fallback option "Yaesu FT-DX10 (Binary)" if you want to try binary mode
+**Intelligent Mode Resolution for SSB and Digital Modes** (Latest):
+- POTA spots often report generic mode names like "SSB" or "FT8"
+- The app now automatically resolves modes to radio-appropriate modes based on frequency:
+  - **SSB**: Below 10 MHz → LSB (Lower Sideband), 10 MHz and above → USB (Upper Sideband)
+  - **Digital modes** (FT8, FT4, PSK31, RTTY, JS8): Below 10 MHz → DATA-L, 10 MHz and above → DATA-U
+- This follows standard amateur radio convention
+- Conversion happens when setting the radio mode via CAT control
+- Supported digital modes: FT8, FT4, PSK31, PSK, RTTY, JS8, JS8CALL
 
-2. **CRITICAL: Implemented your working FA; code**: Now using **exact same approach** as your working implementation
+**Updated Kenwood mode detection to use IF; command**:
+- Changed from `MD;` to `IF;` command for reading mode
+- `IF;` returns comprehensive radio status in one command
+- Parses mode from character positions 20-21 in the response
+- More reliable than the older `MD;` command
+- Also improved `MD` command for setting mode with verification
+
+**Refactored protocol architecture to support model-specific command overrides**:
+
+The FT-DX10 is now properly classified as a Yaesu radio but with command-level overrides for specific operations. This architecture makes the code cleaner and more maintainable.
+
+**How it works**:
+- Each radio has a base `protocol` classification (kenwood, yaesu, or icom)
+- Radios can override specific commands using the `commands` dictionary
+- Available command overrides: `get_frequency`, `set_frequency`, `get_mode`, `set_mode`
+- The FT-DX10 uses base protocol "yaesu" but overrides all commands to use "kenwood" protocol
+
+**Example configuration**:
+```python
+"Yaesu FT-DX10": {
+    "protocol": "yaesu",        # Base protocol for DTR/RTS and general radio behavior
+    "baud": 38400,
+    "commands": {                # Command-specific overrides
+        "get_frequency": "kenwood",
+        "set_frequency": "kenwood",
+        "get_mode": "kenwood",
+        "set_mode": "kenwood"
+    }
+}
+```
+
+This approach allows hybrid protocol radios to be properly organized while maintaining compatibility.
+
+### Previous Fixes
+
+1. **CRITICAL: Frequency Format**: FT-DX10 uses **9 digits in 100 Hz units** (not 10 Hz!)
+   - To send: Hz ÷ 100, format as 9 digits with leading zeros
+   - To receive: 9 digits × 100 = Hz
+   - Example: 14.304 MHz = 14,304,000 Hz ÷ 100 = 143,040 → "014304000"
+
+2. **Implemented working FA; code**: Using exact approach from working implementation
    - FA; command with flush() after write
    - 0.05 second sleep after write (not before!)
    - Read 128 bytes
    - Extract digits only (robust parsing, not fixed positions)
-   - Based on your proven working code for FT-DX10
 
 3. **BCD Encoding/Decoding**: Fixed improper BCD (Binary Coded Decimal) conversion for binary Yaesu protocol
    - Now properly decoding: `0x14` = 14 (not 20)

@@ -40,7 +40,7 @@ def test_kenwood(port, baud_rates=[9600, 19200, 38400, 57600, 115200]):
                 timeout=2.0
             )
 
-            time.sleep(0.5)
+            time.sleep(0.05)
             ser.reset_input_buffer()
 
             # Send IF command
@@ -89,7 +89,7 @@ def test_yaesu(port, baud_rates=[4800, 9600, 19200, 38400]):
             ser.dtr = False
             ser.rts = False
 
-            time.sleep(0.5)
+            time.sleep(0.05)
             ser.reset_input_buffer()
 
             # Send read status command
@@ -143,7 +143,7 @@ def test_icom(port, addresses=[0x94, 0xA4, 0xA2, 0x00], baud_rates=[4800, 9600, 
                     timeout=2.0
                 )
 
-                time.sleep(0.5)
+                time.sleep(0.05)
                 ser.reset_input_buffer()
 
                 # Send read frequency command

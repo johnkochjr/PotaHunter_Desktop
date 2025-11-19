@@ -14,11 +14,49 @@ from potahunter.models.qso import QSO
 from potahunter.models.database import DatabaseManager
 
 
+def resolve_mode_for_radio(mode: str, frequency_mhz: float) -> str:
+    """
+    Resolve mode strings to radio-appropriate modes based on frequency
+
+    Args:
+        mode: The mode string (e.g., 'SSB', 'FT8', 'FT4', 'PSK31')
+        frequency_mhz: Frequency in MHz
+
+    Returns:
+        Resolved mode appropriate for CAT control
+
+    Conversions:
+    - 'SSB' → 'USB' or 'LSB' based on frequency
+    - 'FT8', 'FT4', 'PSK31', 'RTTY' → 'DATA-U' or 'DATA-L' based on frequency
+    - Other modes returned unchanged
+
+    Amateur radio convention:
+    - Below 10 MHz: Lower sideband (LSB, DATA-L)
+    - 10 MHz and above: Upper sideband (USB, DATA-U)
+    """
+    mode_upper = mode.upper()
+
+    # Digital modes that should be converted to DATA-U or DATA-L
+    digital_modes = {'FT8', 'FT4', 'PSK31', 'PSK', 'RTTY', 'JS8', 'JS8CALL', 'CW'}
+
+    if mode_upper == "SSB":
+        # SSB voice mode
+        return "LSB" if frequency_mhz < 10.0 else "USB"
+    elif mode_upper == "CW":
+        # CW mode
+        return "CW-L" if frequency_mhz < 10.0 else "CW-U"
+    elif mode_upper in digital_modes:
+        # Digital modes use DATA-L or DATA-U
+        return "DATA-L" if frequency_mhz < 10.0 else "DATA-U"
+
+    return mode
+
+
 class LoggingDialog(QDialog):
     """Dialog for logging a QSO with prefilled spot data"""
 
     # Common amateur radio modes
-    MODES = ["SSB", "CW", "FM", "AM", "RTTY", "PSK31", "FT8", "FT4", "JS8"]
+    MODES = ["SSB", "USB", "LSB", "CW", "FM", "AM", "RTTY", "PSK31", "FT8", "FT4", "JS8"]
 
     def __init__(self, spot_data: dict, parent=None, cat_service=None):
         super().__init__(parent)
@@ -148,12 +186,22 @@ class LoggingDialog(QDialog):
             self.callsign_input.setText(self.spot_data['callsign'])
 
         # Fill frequency
+        frequency_mhz = None
         if 'frequency' in self.spot_data:
             self.frequency_input.setText(self.spot_data['frequency'])
+            try:
+                frequency_mhz = float(self.spot_data['frequency'])
+            except (ValueError, TypeError):
+                frequency_mhz = None
 
-        # Fill mode
+        # Fill mode - resolve SSB/digital modes to appropriate sideband based on frequency
         if 'mode' in self.spot_data:
             mode = self.spot_data['mode']
+
+            # Resolve mode based on frequency (SSB → USB/LSB, FT8/FT4/etc → DATA-U/DATA-L)
+            # This conversion is for display in the logging dialog
+            # The actual mode sent to the radio will be converted in sync_from_cat
+            # For now, keep the original mode in the dialog so user sees what they expect
             index = self.mode_combo.findText(mode)
             if index >= 0:
                 self.mode_combo.setCurrentIndex(index)
