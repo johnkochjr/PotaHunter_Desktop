@@ -409,13 +409,14 @@ class CATService(QObject):
         Resolve mode strings to radio-appropriate modes based on current frequency
 
         Args:
-            mode: The mode string (e.g., 'SSB', 'FT8', 'FT4', 'PSK31')
+            mode: The mode string (e.g., 'SSB', 'CW', 'FT8', 'FT4', 'PSK31')
 
         Returns:
             Resolved mode appropriate for CAT control
 
         Conversions based on frequency:
         - 'SSB' → 'USB' or 'LSB'
+        - 'CW' → 'CW-U' or 'CW-L'
         - 'FT8', 'FT4', 'PSK31', 'RTTY' → 'DATA-U' or 'DATA-L'
         - Other modes returned unchanged
         """
@@ -437,6 +438,11 @@ class CATService(QObject):
             # SSB voice mode
             resolved = "LSB" if freq_mhz < 10.0 else "USB"
             logger.info(f"Resolved SSB to {resolved} based on frequency {freq_mhz:.3f} MHz")
+            return resolved
+        elif mode_upper == "CW":
+            # CW mode
+            resolved = "CW-L" if freq_mhz < 10.0 else "CW-U"
+            logger.info(f"Resolved CW to {resolved} based on frequency {freq_mhz:.3f} MHz")
             return resolved
         elif mode_upper in digital_modes:
             # Digital modes use DATA-L or DATA-U

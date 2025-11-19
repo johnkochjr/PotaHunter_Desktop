@@ -19,7 +19,7 @@ def resolve_mode_for_radio(mode: str, frequency_mhz: float) -> str:
     Resolve mode strings to radio-appropriate modes based on frequency
 
     Args:
-        mode: The mode string (e.g., 'SSB', 'FT8', 'FT4', 'PSK31')
+        mode: The mode string (e.g., 'SSB', 'CW', 'FT8', 'FT4', 'PSK31')
         frequency_mhz: Frequency in MHz
 
     Returns:
@@ -27,12 +27,13 @@ def resolve_mode_for_radio(mode: str, frequency_mhz: float) -> str:
 
     Conversions:
     - 'SSB' → 'USB' or 'LSB' based on frequency
+    - 'CW' → 'CW-U' or 'CW-L' based on frequency
     - 'FT8', 'FT4', 'PSK31', 'RTTY' → 'DATA-U' or 'DATA-L' based on frequency
     - Other modes returned unchanged
 
     Amateur radio convention:
-    - Below 10 MHz: Lower sideband (LSB, DATA-L)
-    - 10 MHz and above: Upper sideband (USB, DATA-U)
+    - Below 10 MHz: Lower sideband (LSB, CW-L, DATA-L)
+    - 10 MHz and above: Upper sideband (USB, CW-U, DATA-U)
     """
     mode_upper = mode.upper()
 

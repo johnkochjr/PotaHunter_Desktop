@@ -4,10 +4,11 @@
 
 ### Latest Updates
 
-**Intelligent Mode Resolution for SSB and Digital Modes** (Latest):
-- POTA spots often report generic mode names like "SSB" or "FT8"
+**Intelligent Mode Resolution for SSB, CW, and Digital Modes** (Latest):
+- POTA spots often report generic mode names like "SSB", "CW", or "FT8"
 - The app now automatically resolves modes to radio-appropriate modes based on frequency:
   - **SSB**: Below 10 MHz → LSB (Lower Sideband), 10 MHz and above → USB (Upper Sideband)
+  - **CW**: Below 10 MHz → CW-L (CW Lower), 10 MHz and above → CW-U (CW Upper)
   - **Digital modes** (FT8, FT4, PSK31, RTTY, JS8): Below 10 MHz → DATA-L, 10 MHz and above → DATA-U
 - This follows standard amateur radio convention
 - Conversion happens when setting the radio mode via CAT control
