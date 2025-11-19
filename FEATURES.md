@@ -1,5 +1,45 @@
 # POTA Hunter Features
 
+## ADIF Import/Export
+
+POTA Hunter supports importing and exporting your logbook in ADIF format:
+
+### Import ADIF Files
+
+Import contacts from other logging software or previous logs:
+
+- **File → Import ADIF File** - Import QSOs from .adi or .adif files
+- Supports standard ADIF 3.1.4 format
+- Automatically validates file format before import
+- **Auto-Protection**: All imported QSOs are automatically marked as "uploaded" to prevent duplicate uploads to QRZ Logbook
+- Preserves all contact details including:
+  - Basic QSO information (callsign, frequency, mode, date/time)
+  - Station information (name, QTH, state, grid square)
+  - POTA park references (from SIG/SIG_INFO fields)
+  - My station information
+  - Comments and notes
+- Shows detailed import summary with success/error counts
+- Imported QSOs immediately appear in the integrated logbook
+
+**Use Cases:**
+- Migrate from other logging software
+- Import paper logs you've digitized
+- Restore from backups
+- Consolidate logs from multiple sources
+
+### Export ADIF Files
+
+Export your entire logbook to ADIF format:
+
+- **File → Export Log (ADIF)** - Export all QSOs to .adi file
+- Standard ADIF 3.1.4 format
+- Compatible with:
+  - QRZ Logbook
+  - LoTW (via TQSL)
+  - Other amateur radio logging software
+- Includes all contact details and POTA-specific fields
+- Exports with proper POTA SIG/SIG_INFO fields for park activations
+
 ## QRZ Integration
 
 Real-time callsign lookup using the QRZ XML API:

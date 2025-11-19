@@ -91,9 +91,24 @@ PotaHunter/data/potahunter.db
 
 **Important**: Backup this file regularly to preserve your log!
 
+## Importing QSOs from ADIF Files
+
+Bring in existing logs from other software:
+
+1. Go to **File → Import ADIF File**
+2. Select your .adi or .adif file
+3. Imported QSOs will be added to your logbook
+4. **Note**: Imported QSOs are automatically marked to prevent duplicate uploads to QRZ
+
+This is useful for:
+- Migrating from other logging software
+- Importing paper logs you've typed up
+- Restoring from backups
+- Consolidating multiple logs
+
 ## Exporting Your Log
 
-1. Click "Export Log (ADIF)" button
+1. Go to **File → Export Log (ADIF)** or click "Export Log (ADIF)" button
 2. Choose where to save the file
 3. The .adi file can be imported into:
    - QRZ Logbook

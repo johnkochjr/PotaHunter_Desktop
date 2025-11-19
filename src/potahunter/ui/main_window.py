@@ -21,6 +21,7 @@ from potahunter.ui.settings_dialog import SettingsDialog
 from potahunter.ui.logbook_viewer import LogbookViewer
 from potahunter.models.database import DatabaseManager
 from potahunter.utils.adif_export import ADIFExporter
+from potahunter.utils.adif_import import ADIFImporter
 
 class MainWindow(QMainWindow):
     """Main application window displaying POTA spots"""
@@ -340,6 +341,10 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        import_action = QAction("&Import ADIF File", self)
+        import_action.triggered.connect(self.import_adif)
+        file_menu.addAction(import_action)
+
         export_action = QAction("&Export Log (ADIF)", self)
         export_action.triggered.connect(self.export_log)
         file_menu.addAction(export_action)
@@ -537,6 +542,87 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             # Refresh logbook after saving a QSO
             self.refresh_logbook()
+
+    def import_adif(self):
+        """Import QSOs from an ADIF file"""
+        # Open file dialog
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import ADIF File",
+            "",
+            "ADIF Files (*.adi *.adif);;All Files (*)"
+        )
+
+        if not filename:
+            # User cancelled
+            return
+
+        # Validate file format
+        is_valid, error_msg = ADIFImporter.validate_adif_file(filename)
+        if not is_valid:
+            QMessageBox.critical(
+                self,
+                "Invalid File",
+                f"The selected file does not appear to be a valid ADIF file.\n\n{error_msg}"
+            )
+            return
+
+        # Import QSOs
+        self.status_bar.showMessage("Importing ADIF file...", 0)
+        try:
+            qsos, errors = ADIFImporter.import_from_file(filename)
+
+            if not qsos and errors:
+                QMessageBox.critical(
+                    self,
+                    "Import Failed",
+                    f"Failed to import any QSOs from the file.\n\n"
+                    f"Errors:\n" + "\n".join(errors[:5])  # Show first 5 errors
+                )
+                self.status_bar.showMessage("Import failed", 5000)
+                return
+
+            # Add QSOs to database
+            db_manager = DatabaseManager()
+            imported_count = 0
+            skipped_count = 0
+
+            for qso in qsos:
+                try:
+                    # Mark as uploaded to prevent auto-upload to QRZ
+                    qso.qrz_uploaded = True
+                    db_manager.add_qso(qso)
+                    imported_count += 1
+                except Exception as e:
+                    skipped_count += 1
+                    errors.append(f"Failed to add QSO {qso.callsign}: {str(e)}")
+
+            # Refresh logbook display
+            self.refresh_logbook()
+
+            # Show results
+            message = f"Successfully imported {imported_count} QSO(s) from:\n\n{filename}"
+            if skipped_count > 0:
+                message += f"\n\n{skipped_count} QSO(s) were skipped due to errors."
+            if errors:
+                message += f"\n\nNote: Imported QSOs are marked as 'uploaded' to prevent duplicate uploads to QRZ."
+                if len(errors) > 0:
+                    message += f"\n\nFirst few errors:\n" + "\n".join(errors[:3])
+
+            QMessageBox.information(
+                self,
+                "Import Complete",
+                message
+            )
+            self.status_bar.showMessage(f"Imported {imported_count} QSOs", 5000)
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Import Error",
+                f"An error occurred while importing:\n\n{str(e)}"
+            )
+            self.status_bar.showMessage("Import failed", 5000)
 
     def export_log(self):
         """Export log to ADIF file"""
