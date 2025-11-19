@@ -395,12 +395,27 @@ class MainWindow(QMainWindow):
         self.spots_table.setSortingEnabled(False)
         self.spots_table.setRowCount(len(spots))
 
+        # Get all unique callsigns from spots
+        callsigns = [spot.get('activator', '') for spot in spots if spot.get('activator')]
+
+        # Get QSO counts for all callsigns in one efficient query
+        qso_counts = self.db_manager.get_callsign_qso_counts(callsigns)
+
         for row, spot in enumerate(spots):
             mode = spot.get('mode', '').upper()
+            callsign = spot.get('activator', '')
 
             # Create items
             time_item = QTableWidgetItem(spot.get('spotTime', ''))
-            callsign_item = QTableWidgetItem(spot.get('activator', ''))
+
+            # Add QSO count to callsign if > 0
+            count = qso_counts.get(callsign.upper(), 0)
+            if count > 0:
+                callsign_display = f"{callsign} ({count})"
+            else:
+                callsign_display = callsign
+            callsign_item = QTableWidgetItem(callsign_display)
+
             freq_item = QTableWidgetItem(spot.get('frequency', ''))
             mode_item = QTableWidgetItem(spot.get('mode', ''))
             park_item = QTableWidgetItem(spot.get('reference', ''))
@@ -521,8 +536,15 @@ class MainWindow(QMainWindow):
             return
 
         # Extract spot data from table
+        # Strip QSO count from callsign if present (format: "CALLSIGN (count)")
+        callsign_text = self.spots_table.item(row, 1).text()
+        if ' (' in callsign_text:
+            callsign = callsign_text.split(' (')[0]
+        else:
+            callsign = callsign_text
+
         spot_data = {
-            'callsign': self.spots_table.item(row, 1).text(),
+            'callsign': callsign,
             'frequency': self.spots_table.item(row, 2).text(),
             'mode': self.spots_table.item(row, 3).text(),
             'park': self.spots_table.item(row, 4).text(),
@@ -731,13 +753,21 @@ class MainWindow(QMainWindow):
     def refresh_logbook(self):
         """Refresh logbook from database"""
         try:
-            # Get all QSOs from database
-            self.all_qsos = self.db_manager.get_all_qsos()
+            # Get limited QSOs for initial display (most recent 50)
+            # Note: When filtering, we'll need to get all QSOs
+            self.all_qsos = self.db_manager.get_all_qsos(limit=50)
 
             # Apply current filter
             self.filter_logbook()
 
-            self.status_bar.showMessage(f"Loaded {len(self.all_qsos)} QSOs", 2000)
+            # Get total count for status message
+            stats = self.db_manager.get_stats()
+            total_count = stats['total_qsos']
+
+            if len(self.all_qsos) < total_count:
+                self.status_bar.showMessage(f"Showing most recent {len(self.all_qsos)} of {total_count} QSOs", 2000)
+            else:
+                self.status_bar.showMessage(f"Loaded {len(self.all_qsos)} QSOs", 2000)
         except Exception as e:
             self.status_bar.showMessage(f"Error loading logbook: {str(e)}", 5000)
             logging.error(f"Error refreshing logbook: {e}")
@@ -750,22 +780,41 @@ class MainWindow(QMainWindow):
             filter_type: Type of filter ('Callsign', 'Park', or empty for no filter)
         """
         try:
-            # Filter QSOs based on filter type
-            if filter_type == "Callsign" and filter_text:
-                filtered_qsos = [qso for qso in self.all_qsos if qso.callsign.upper() == filter_text.upper()]
-            elif filter_type == "Park" and filter_text:
-                filtered_qsos = [qso for qso in self.all_qsos if qso.park_reference and qso.park_reference.upper() == filter_text.upper()]
+            # If filtering is active, we need to load all QSOs to search through them
+            if (filter_type == "Callsign" and filter_text) or (filter_type == "Park" and filter_text):
+                # Load all QSOs for filtering
+                all_qsos_full = self.db_manager.get_all_qsos()
+
+                if filter_type == "Callsign":
+                    filtered_qsos = [qso for qso in all_qsos_full if qso.callsign.upper() == filter_text.upper()]
+                else:  # Park
+                    filtered_qsos = [qso for qso in all_qsos_full if qso.park_reference and qso.park_reference.upper() == filter_text.upper()]
+
+                # Update table
+                self.populate_logbook_table(filtered_qsos)
+
+                # Get total count
+                stats = self.db_manager.get_stats()
+                total_count = stats['total_qsos']
+
+                # Update count label
+                self.logbook_count_label.setText(f"{len(filtered_qsos)} of {total_count} QSOs")
             else:
+                # No filter - show limited recent QSOs
                 filtered_qsos = self.all_qsos
 
-            # Update table
-            self.populate_logbook_table(filtered_qsos)
+                # Update table
+                self.populate_logbook_table(filtered_qsos)
 
-            # Update count label
-            if filtered_qsos != self.all_qsos:
-                self.logbook_count_label.setText(f"{len(filtered_qsos)} of {len(self.all_qsos)} QSOs")
-            else:
-                self.logbook_count_label.setText(f"{len(self.all_qsos)} QSOs")
+                # Get total count for display
+                stats = self.db_manager.get_stats()
+                total_count = stats['total_qsos']
+
+                # Update count label
+                if len(self.all_qsos) < total_count:
+                    self.logbook_count_label.setText(f"Showing {len(self.all_qsos)} most recent of {total_count} QSOs")
+                else:
+                    self.logbook_count_label.setText(f"{len(self.all_qsos)} QSOs")
 
         except Exception as e:
             logging.error(f"Error filtering logbook: {e}")
@@ -1185,7 +1234,13 @@ class MainWindow(QMainWindow):
         if not callsign_item:
             return
 
-        callsign = callsign_item.text().strip()
+        # Strip QSO count from callsign if present (format: "CALLSIGN (count)")
+        callsign_text = callsign_item.text().strip()
+        if ' (' in callsign_text:
+            callsign = callsign_text.split(' (')[0]
+        else:
+            callsign = callsign_text
+
         if not callsign:
             return
 

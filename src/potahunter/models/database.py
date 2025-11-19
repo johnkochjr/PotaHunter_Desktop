@@ -99,7 +99,7 @@ class DatabaseManager:
             )
         ''')
 
-        # Create index on callsign and date for faster queries
+        # Create indexes for faster queries
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_callsign_date
             ON qsos(callsign, qso_date)
@@ -108,6 +108,12 @@ class DatabaseManager:
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_park
             ON qsos(park_reference)
+        ''')
+
+        # Create index on callsign alone for quick lookups
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_callsign
+            ON qsos(callsign COLLATE NOCASE)
         ''')
 
         conn.commit()
@@ -242,9 +248,12 @@ class DatabaseManager:
 
         return qso_id
 
-    def get_all_qsos(self) -> List[QSO]:
+    def get_all_qsos(self, limit: Optional[int] = None) -> List[QSO]:
         """
         Retrieve all QSOs from database
+
+        Args:
+            limit: Optional limit on number of QSOs to return (most recent first)
 
         Returns:
             List of QSO objects
@@ -253,7 +262,10 @@ class DatabaseManager:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        cursor.execute('SELECT * FROM qsos ORDER BY qso_date DESC, time_on DESC')
+        if limit:
+            cursor.execute('SELECT * FROM qsos ORDER BY qso_date DESC, time_on DESC LIMIT ?', (limit,))
+        else:
+            cursor.execute('SELECT * FROM qsos ORDER BY qso_date DESC, time_on DESC')
         rows = cursor.fetchall()
         conn.close()
 
@@ -452,6 +464,45 @@ class DatabaseManager:
             'total_parks': total_parks,
             'total_callsigns': total_callsigns
         }
+
+    def get_callsign_qso_counts(self, callsigns: List[str]) -> dict:
+        """
+        Get QSO counts for multiple callsigns efficiently
+
+        Args:
+            callsigns: List of callsigns to look up
+
+        Returns:
+            Dictionary mapping callsign to QSO count
+        """
+        if not callsigns:
+            return {}
+
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Create placeholders for SQL IN clause
+        placeholders = ','.join('?' * len(callsigns))
+
+        # Convert callsigns to uppercase for case-insensitive matching
+        callsigns_upper = [c.upper() for c in callsigns]
+
+        # Use GROUP BY to count QSOs per callsign efficiently
+        query = f'''
+            SELECT UPPER(callsign) as callsign_upper, COUNT(*) as qso_count
+            FROM qsos
+            WHERE UPPER(callsign) IN ({placeholders})
+            GROUP BY callsign_upper
+        '''
+
+        cursor.execute(query, callsigns_upper)
+        results = cursor.fetchall()
+        conn.close()
+
+        # Build result dictionary
+        counts = {callsign.upper(): count for callsign, count in results}
+
+        return counts
 
     @staticmethod
     def _row_to_qso(row: sqlite3.Row) -> QSO:
