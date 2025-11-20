@@ -271,6 +271,49 @@ class DatabaseManager:
 
         return [self._row_to_qso(row) for row in rows]
 
+    def get_unuploaded_qsos(self) -> List[QSO]:
+        """
+        Retrieve QSOs that have not been uploaded to QRZ
+
+        Returns:
+            List of QSO objects where qrz_uploaded is False or NULL
+        """
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM qsos
+            WHERE qrz_uploaded IS NULL OR qrz_uploaded = 0
+            ORDER BY qso_date DESC, time_on DESC
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [self._row_to_qso(row) for row in rows]
+
+    def get_qso_by_id(self, qso_id: int) -> Optional[QSO]:
+        """
+        Retrieve a single QSO by its ID
+
+        Args:
+            qso_id: The QSO ID to retrieve
+
+        Returns:
+            QSO object or None if not found
+        """
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM qsos WHERE id = ?', (qso_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return self._row_to_qso(row)
+        return None
+
     def get_qsos_by_date(self, start_date: str, end_date: str = None) -> List[QSO]:
         """
         Get QSOs within a date range

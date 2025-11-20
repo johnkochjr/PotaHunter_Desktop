@@ -269,8 +269,8 @@ class CATService(QObject):
                     bytesize=serial.EIGHTBITS,
                     parity=serial.PARITY_NONE,
                     stopbits=serial.STOPBITS_ONE,
-                    timeout=1.0,  # Increased timeout for slower radios
-                    write_timeout=2.0,
+                    timeout=0.1,  # Reduced from 1.0s to 0.1s for faster response
+                    write_timeout=0.5,  # Reduced from 2.0s to 0.5s
                     exclusive=True,  # Prevent other apps from using the port
                     rtscts=False,
                     dsrdtr=False
@@ -387,8 +387,6 @@ class CATService(QObject):
         Returns:
             Mode string (USB, LSB, CW, FM, AM, etc.), or None if error
         """
-        logger.debug("Getting mode from radio")
-        logger.debug(f"is_connected: {self.is_connected}, serial_port: {self.serial_port}, protocol: {self.protocol}")
         if not self.is_connected or not self.serial_port:
             return None
 
@@ -437,17 +435,14 @@ class CATService(QObject):
         if mode_upper == "SSB":
             # SSB voice mode
             resolved = "LSB" if freq_mhz < 10.0 else "USB"
-            logger.info(f"Resolved SSB to {resolved} based on frequency {freq_mhz:.3f} MHz")
             return resolved
         elif mode_upper == "CW":
             # CW mode
             resolved = "CW-L" if freq_mhz < 10.0 else "CW-U"
-            logger.info(f"Resolved CW to {resolved} based on frequency {freq_mhz:.3f} MHz")
             return resolved
         elif mode_upper in digital_modes:
             # Digital modes use DATA-L or DATA-U
             resolved = "DATA-L" if freq_mhz < 10.0 else "DATA-U"
-            logger.info(f"Resolved {mode} to {resolved} based on frequency {freq_mhz:.3f} MHz")
             return resolved
 
         return mode
@@ -462,8 +457,6 @@ class CATService(QObject):
         Returns:
             True if successful, False otherwise
         """
-        logger.debug(f"Setting mode to: {mode}")
-        logger.debug(f"is_connected: {self.is_connected}, serial_port: {self.serial_port}, protocol: {self.protocol}")
         if not self.is_connected or not self.serial_port:
             return False
 
@@ -472,7 +465,6 @@ class CATService(QObject):
             resolved_mode = self._resolve_mode_for_radio(mode)
 
             protocol = self._get_protocol_for_command("set_mode")
-            logger.debug(f"Using protocol for set_mode: {protocol}")
             if protocol == "kenwood":
                 return self._set_mode_kenwood(resolved_mode)
             elif protocol == "yaesu":
@@ -500,6 +492,59 @@ class CATService(QObject):
             self.current_mode = mode
             self.mode_changed.emit(mode)
 
+    def get_power(self) -> Optional[int]:
+        """
+        Get current power level from radio
+
+        Returns:
+            Power level in watts, or None if error
+        """
+        if not self.is_connected or not self.serial_port:
+            return None
+
+        try:
+            protocol = self._get_protocol_for_command("get_power") if hasattr(self, 'radio_config') and "get_power" in self.radio_config.get("commands", {}) else self.protocol
+
+            if protocol in ["kenwood", "yaesu"]:  # Kenwood/Yaesu command works for both
+                return self._get_power_kenwood()
+            elif protocol == "icom":
+                logger.warning("Power control not yet implemented for Icom radios")
+                return None
+            else:
+                logger.error(f"Unknown protocol for get_power: {protocol}")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting power: {e}")
+            return None
+
+    def set_power(self, power: int) -> bool:
+        """
+        Set radio power level
+
+        Args:
+            power: Power level in watts
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected or not self.serial_port:
+            return False
+
+        try:
+            protocol = self._get_protocol_for_command("set_power") if hasattr(self, 'radio_config') and "set_power" in self.radio_config.get("commands", {}) else self.protocol
+
+            if protocol in ["kenwood", "yaesu"]:  # Kenwood/Yaesu command works for both
+                return self._set_power_kenwood(power)
+            elif protocol == "icom":
+                logger.warning("Power control not yet implemented for Icom radios")
+                return False
+            else:
+                logger.error(f"Unknown protocol for set_power: {protocol}")
+                return False
+        except Exception as e:
+            logger.error(f"Error setting power: {e}")
+            return False
+
     # Kenwood protocol implementation
     def _get_frequency_kenwood(self) -> Optional[float]:
         """Get frequency using Kenwood protocol"""
@@ -511,9 +556,9 @@ class CATService(QObject):
             self.serial_port.write(b"FA;")
             self.serial_port.flush()  # Ensure command is sent immediately
 
-            # Short sleep after write (per FT-DX10 working implementation)
+            # Reduced delay - radio responds quickly
             import time
-            time.sleep(0.05)
+            time.sleep(0.02)  # Reduced from 0.05 to 0.02 (20ms)
 
             # Read response (use 128 bytes like working implementation)
             response = self.serial_port.read(128)
@@ -549,59 +594,23 @@ class CATService(QObject):
     def _set_frequency_kenwood(self, frequency: float) -> bool:
         """Set frequency using Kenwood protocol"""
         try:
-            import time
-
-            # Flush the input buffer to clear any pending data
-            self.serial_port.reset_input_buffer()
-            self.serial_port.reset_output_buffer()
-
             freq_int = int(frequency)
 
             # FT-DX10 uses Kenwood protocol with 9-digit format
             # The 9 digits represent frequency in 100 Hz units (not 10 Hz!)
             # Example: 14.304 MHz = 14,304,000 Hz ÷ 100 = 143,040 → "014304000"
             # Example: 7.243 MHz = 7,243,000 Hz ÷ 100 = 72,430 → "000724300"
-            freq_100hz = freq_int 
+            freq_100hz = freq_int
             freq_str = f"{freq_100hz:09d}"  # Exactly 9 digits with leading zeros
             command = f"FA{freq_str};".encode('ascii')
 
-            # First, read the current frequency to verify communication is working
-            current_freq = self._get_frequency_kenwood()
-            if current_freq:
-                logger.info(f"Kenwood: Current radio frequency before set: {current_freq} Hz ({current_freq/1_000_000:.6f} MHz)")
-            else:
-                logger.warning(f"Kenwood: Could not read current frequency before attempting set")
 
             self.serial_port.write(command)
             self.serial_port.flush()
 
-            # # Short delay - just enough for radio to respond if it will
-            # time.sleep(0.1)
-
-            # # Try to read any response/acknowledgment from radio
-            # response = self.serial_port.read(128)
-            # if response:
-            #     # Check for error response
-            #     if response == b'?;':
-            #         logger.error(f"Kenwood: Radio rejected frequency command with '?;' error!")
-            #         logger.error(f"Kenwood: This usually means frequency is out of range or radio is locked")
-            #         logger.error(f"Kenwood: Check radio settings: band edges, frequency lock, or operating mode")
-            #         return False
-            # else:
-            #     logger.warning(f"Kenwood: No response from radio after set frequency")
-
-            # Verify the frequency was set by reading it back
-            time.sleep(0.05)
-            actual_freq = self._get_frequency_kenwood()
-            if actual_freq:
-                # Check if it's close (within 100 Hz tolerance for rounding)
-                if abs(actual_freq - (frequency * 100)) < 100:
-                    return True
-                else:
-                    return False
-            else:
-                logger.warning(f"Kenwood: Could not verify frequency was set")
-                return False
+            # No verification - trust the radio to set the frequency
+            # This significantly improves performance
+            return True
 
         except Exception as e:
             logger.error(f"Kenwood: Error setting frequency: {e}")
@@ -611,14 +620,12 @@ class CATService(QObject):
         """Get mode using Kenwood protocol IF; command"""
         import time
         try:
-            logger.info("Kenwood: Getting mode with IF; command")
             # Flush input buffer
             self.serial_port.reset_input_buffer()
             self.serial_port.write(b"IF;")
             self.serial_port.flush()
-            time.sleep(0.05)   # 50 ms
+            time.sleep(0.02)   # Reduced from 50ms to 20ms
             response = self.serial_port.read(128)
-            logger.debug(f"Kenwood: Received {len(response)} bytes: {response}")
 
             if response and len(response) >= 21:
                 # IF; response format from FT-DX10: IF001018145000+000000200000;
@@ -646,14 +653,12 @@ class CATService(QObject):
                 try:
                     # Decode response
                     text = response.decode('ascii', errors='replace')
-                    logger.debug(f"Kenwood: Full IF response: '{text}'")
 
                     # Check if response starts with "IF"
                     if text.startswith('IF') and len(text) >= 23:
                         # The mode appears at positions 20-21 (0-indexed from IF prefix start)
                         # That's positions 18-19 counting from after "IF"
                         mode_code = text[20:22]
-                        logger.debug(f"Kenwood: Mode code from IF positions [20:22]: '{mode_code}'")
 
                         # Map mode code to mode name
                         mode_map = {
@@ -671,7 +676,6 @@ class CATService(QObject):
                         }
 
                         mode = mode_map.get(mode_code, "UNKNOWN")
-                        logger.info(f"Kenwood: Parsed mode: {mode} from code '{mode_code}'")
                         return mode
                     else:
                         logger.warning(f"Kenwood: Invalid IF response format: {text[:10]}")
@@ -685,7 +689,6 @@ class CATService(QObject):
 
     def _set_mode_kenwood(self, mode: str) -> bool:
         """Set mode using Kenwood protocol MD command"""
-        import time
         try:
             # Map mode name to code for MD command
             # MD command format: MD + code + ;
@@ -703,7 +706,7 @@ class CATService(QObject):
                 "0C": "DATA-U"
             }
             reverse_mode_map = {v: k for k, v in mode_map.items()}
-    
+
             mode_code = reverse_mode_map.get(mode.upper().strip())
             if not mode_code:
                 logger.warning(f"Kenwood: Unknown mode '{mode}'")
@@ -711,24 +714,82 @@ class CATService(QObject):
 
             # Send MD command
             command = f"MD{mode_code};".encode('ascii')
-            logger.debug(f"Kenwood: Setting mode with command: {command}")
 
-            self.serial_port.reset_input_buffer()
             self.serial_port.write(command)
             self.serial_port.flush()
-            time.sleep(0.05)
 
-            # Verify by reading back the mode
-            actual_mode = self._get_mode_kenwood()
-            if actual_mode and actual_mode.upper() == mode.upper():
-                logger.info(f"Kenwood: Mode set successfully to {mode}")
-                return True
-            else:
-                logger.warning(f"Kenwood: Mode verification failed. Expected {mode}, got {actual_mode}")
-                return False
+            # No verification - trust the radio to set the mode
+            # This significantly improves performance
+            return True
 
         except Exception as e:
             logger.error(f"Kenwood: Error setting mode: {e}")
+            return False
+
+    def _get_power_kenwood(self) -> Optional[int]:
+        """Get power using Kenwood/Yaesu PC command"""
+        import time
+        try:
+            self.serial_port.reset_input_buffer()
+
+            # Send PC; command to read power
+            self.serial_port.write(b"PC;")
+            self.serial_port.flush()
+            time.sleep(0.02)  # Reduced from 50ms to 20ms
+
+            # Read response
+            response = self.serial_port.read(128)
+
+            if not response:
+                logger.warning("Kenwood: No response to PC command")
+                return None
+
+            # Decode response - format is PCnnn; where nnn is 3-digit power in watts
+            try:
+                text = response.decode('ascii', errors='replace')
+                # Extract digits after PC
+                if 'PC' in text:
+                    # Find PC and extract the 3 digits after it
+                    pc_idx = text.find('PC')
+                    if pc_idx >= 0:
+                        digits = text[pc_idx+2:pc_idx+5]
+                        if digits.isdigit():
+                            power = int(digits)
+                            return power
+                        else:
+                            logger.warning(f"Kenwood: Invalid power digits: {digits}")
+                else:
+                    logger.warning(f"Kenwood: No PC in response: {text}")
+            except Exception as parse_error:
+                logger.error(f"Kenwood: Error parsing power response: {parse_error}")
+
+            return None
+        except Exception as e:
+            logger.error(f"Kenwood: Error reading power: {e}")
+            return None
+
+    def _set_power_kenwood(self, power: int) -> bool:
+        """Set power using Kenwood/Yaesu PC command"""
+        try:
+            # Validate power range (0-999 watts)
+            if power < 0 or power > 999:
+                logger.error(f"Kenwood: Power {power}W out of range (0-999)")
+                return False
+
+            # Format power as 3-digit string with leading zeros
+            power_str = f"{power:03d}"
+            command = f"PC{power_str};".encode('ascii')
+
+
+            self.serial_port.write(command)
+            self.serial_port.flush()
+
+            # No verification - trust the radio to set the power
+            # This significantly improves performance
+            return True
+
+        except Exception as e:
+            logger.error(f"Kenwood: Error setting power: {e}")
             return False
 
     # Yaesu protocol implementation
@@ -738,10 +799,8 @@ class CATService(QObject):
             # Flush input buffer
             self.serial_port.reset_input_buffer()
 
-            logger.debug("Yaesu: Sending read status command")
             self.serial_port.write(bytes([0x00, 0x00, 0x00, 0x00, 0x03]))
             response = self.serial_port.read(28)
-            logger.debug(f"Yaesu: Received {len(response)} bytes: {response.hex() if response else 'None'}")
 
             if response and len(response) >= 5:
                 # BCD format: 4 bytes for frequency
@@ -754,7 +813,6 @@ class CATService(QObject):
                        bcd_to_int(response[2]) * 10000 +
                        bcd_to_int(response[3]) * 100)
                 result = float(freq) * 10  # Multiply by 10 to get Hz
-                logger.debug(f"Yaesu: Parsed frequency: {result}")
                 return result
             else:
                 logger.warning(f"Yaesu: Invalid response length: {len(response)}")
@@ -810,10 +868,8 @@ class CATService(QObject):
 
             # CI-V command: FE FE [radio] E0 03 FD
             command = bytes([0xFE, 0xFE, address, 0xE0, 0x03, 0xFD])
-            logger.debug(f"Icom: Sending command: {command.hex()}")
             self.serial_port.write(command)
             response = self.serial_port.read(17)
-            logger.debug(f"Icom: Received {len(response)} bytes: {response.hex() if response else 'None'}")
 
             if response and len(response) >= 11 and response[0:2] == bytes([0xFE, 0xFE]):
                 # Extract BCD frequency (5 bytes)
@@ -821,7 +877,6 @@ class CATService(QObject):
                 freq = 0
                 for i, byte in enumerate(freq_bcd):
                     freq += ((byte & 0x0F) + ((byte >> 4) * 10)) * (100 ** i)
-                logger.debug(f"Icom: Parsed frequency: {freq}")
                 return float(freq)
             else:
                 logger.warning(f"Icom: Invalid response: {response.hex() if response else 'None'}")

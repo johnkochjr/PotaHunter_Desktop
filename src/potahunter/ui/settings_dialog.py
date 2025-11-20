@@ -282,6 +282,49 @@ class SettingsDialog(QDialog):
         cat_form.addRow("Baud Rate:", baud_layout)
 
         cat_layout.addLayout(cat_form)
+        cat_layout.addSpacing(15)
+
+        # Power Levels Section
+        power_header = QLabel("<b>Power Levels by Mode</b>")
+        cat_layout.addWidget(power_header)
+
+        power_info = QLabel(
+            "Set transmit power levels (in watts) for different mode categories.\n"
+            "Leave blank to use radio's current power setting."
+        )
+        power_info.setWordWrap(True)
+        power_info.setStyleSheet("font-style: italic; color: gray; font-size: 11px;")
+        cat_layout.addWidget(power_info)
+
+        power_form = QFormLayout()
+
+        self.cat_power_ssb = QLineEdit()
+        self.cat_power_ssb.setPlaceholderText("e.g., 100")
+        self.cat_power_ssb.setMaximumWidth(150)
+        power_form.addRow("SSB Power (Watts):", self.cat_power_ssb)
+
+        self.cat_power_data = QLineEdit()
+        self.cat_power_data.setPlaceholderText("e.g., 50")
+        self.cat_power_data.setMaximumWidth(150)
+        power_form.addRow("Data Power (Watts):", self.cat_power_data)
+
+        self.cat_power_cw = QLineEdit()
+        self.cat_power_cw.setPlaceholderText("e.g., 100")
+        self.cat_power_cw.setMaximumWidth(150)
+        power_form.addRow("CW Power (Watts):", self.cat_power_cw)
+
+        cat_layout.addLayout(power_form)
+
+        power_note = QLabel(
+            "<b>Mode Categories:</b><br>"
+            "• <b>SSB:</b> USB, LSB, FM, AM (phone modes)<br>"
+            "• <b>Data:</b> FT8, FT4, RTTY, PSK31, and other digital modes<br>"
+            "• <b>CW:</b> All CW modes"
+        )
+        power_note.setWordWrap(True)
+        power_note.setStyleSheet("font-size: 11px; color: gray;")
+        cat_layout.addWidget(power_note)
+
         cat_layout.addSpacing(10)
 
         # Enable CAT control checkbox
@@ -618,11 +661,40 @@ class SettingsDialog(QDialog):
             except ValueError:
                 baud_rate = None
 
+        # Parse power levels
+        power_ssb = None
+        power_data = None
+        power_cw = None
+
+        try:
+            ssb_text = self.cat_power_ssb.text().strip()
+            if ssb_text:
+                power_ssb = int(ssb_text)
+        except ValueError:
+            pass
+
+        try:
+            data_text = self.cat_power_data.text().strip()
+            if data_text:
+                power_data = int(data_text)
+        except ValueError:
+            pass
+
+        try:
+            cw_text = self.cat_power_cw.text().strip()
+            if cw_text:
+                power_cw = int(cw_text)
+        except ValueError:
+            pass
+
         return {
             'cat_enabled': self.cat_enabled.isChecked(),
             'cat_radio_model': self.cat_radio_model.currentData(),
             'cat_com_port': self.cat_com_port.currentText(),
             'cat_baud_rate': baud_rate,
+            'cat_power_ssb': power_ssb,
+            'cat_power_data': power_data,
+            'cat_power_cw': power_cw,
         }
 
     def set_cat_settings(self, settings):
@@ -657,3 +729,16 @@ class SettingsDialog(QDialog):
         else:
             # Default to "Auto"
             self.cat_baud_rate.setCurrentIndex(0)
+
+        # Set power levels
+        power_ssb = settings.get('cat_power_ssb')
+        if power_ssb is not None:
+            self.cat_power_ssb.setText(str(power_ssb))
+
+        power_data = settings.get('cat_power_data')
+        if power_data is not None:
+            self.cat_power_data.setText(str(power_data))
+
+        power_cw = settings.get('cat_power_cw')
+        if power_cw is not None:
+            self.cat_power_cw.setText(str(power_cw))

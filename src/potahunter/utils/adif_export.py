@@ -169,9 +169,18 @@ class ADIFExporter:
         if qso.my_sig_info:
             fields.append(ADIFExporter._field('MY_SIG_INFO', qso.my_sig_info))
 
-        # Comments
-        if qso.comment:
-            fields.append(ADIFExporter._field('COMMENT', qso.comment))
+        # Comments - append park information if present
+        comment_text = qso.comment or ''
+
+        # Append park reference to comments if present
+        if qso.park_reference:
+            if comment_text:
+                comment_text += f" | Park: {qso.park_reference}"
+            else:
+                comment_text = f"Park: {qso.park_reference}"
+
+        if comment_text:
+            fields.append(ADIFExporter._field('COMMENT', comment_text))
 
         # Join all fields and add end of record marker
         return ''.join(fields) + '<EOR>\n\n'

@@ -246,18 +246,20 @@ class QRZUploadDialog(QDialog):
         """Select all QSOs"""
         for row in range(self.qso_table.rowCount()):
             checkbox_widget = self.qso_table.cellWidget(row, 0)
-            checkbox = checkbox_widget.findChild(QCheckBox)
-            if checkbox:
-                checkbox.setChecked(True)
+            if checkbox_widget:  # Check if widget exists
+                checkbox = checkbox_widget.findChild(QCheckBox)
+                if checkbox:
+                    checkbox.setChecked(True)
         self.update_selection_count()
 
     def select_none(self):
         """Deselect all QSOs"""
         for row in range(self.qso_table.rowCount()):
             checkbox_widget = self.qso_table.cellWidget(row, 0)
-            checkbox = checkbox_widget.findChild(QCheckBox)
-            if checkbox:
-                checkbox.setChecked(False)
+            if checkbox_widget:  # Check if widget exists
+                checkbox = checkbox_widget.findChild(QCheckBox)
+                if checkbox:
+                    checkbox.setChecked(False)
         self.update_selection_count()
 
     def select_unuploaded(self):
@@ -265,9 +267,10 @@ class QRZUploadDialog(QDialog):
         for row in range(self.qso_table.rowCount()):
             qso = self.qsos[row]
             checkbox_widget = self.qso_table.cellWidget(row, 0)
-            checkbox = checkbox_widget.findChild(QCheckBox)
-            if checkbox:
-                checkbox.setChecked(not qso.qrz_uploaded)
+            if checkbox_widget:  # Check if widget exists
+                checkbox = checkbox_widget.findChild(QCheckBox)
+                if checkbox:
+                    checkbox.setChecked(not qso.qrz_uploaded)
         self.update_selection_count()
 
     def update_selection_count(self):
@@ -275,9 +278,10 @@ class QRZUploadDialog(QDialog):
         count = 0
         for row in range(self.qso_table.rowCount()):
             checkbox_widget = self.qso_table.cellWidget(row, 0)
-            checkbox = checkbox_widget.findChild(QCheckBox)
-            if checkbox and checkbox.isChecked():
-                count += 1
+            if checkbox_widget:  # Check if widget exists
+                checkbox = checkbox_widget.findChild(QCheckBox)
+                if checkbox and checkbox.isChecked():
+                    count += 1
 
         self.selection_count_label.setText(f"{count} QSO(s) selected")
 
@@ -286,9 +290,10 @@ class QRZUploadDialog(QDialog):
         selected = []
         for row in range(self.qso_table.rowCount()):
             checkbox_widget = self.qso_table.cellWidget(row, 0)
-            checkbox = checkbox_widget.findChild(QCheckBox)
-            if checkbox and checkbox.isChecked():
-                selected.append(self.qsos[row])
+            if checkbox_widget:  # Check if widget exists
+                checkbox = checkbox_widget.findChild(QCheckBox)
+                if checkbox and checkbox.isChecked():
+                    selected.append(self.qsos[row])
         return selected
 
     def upload_qsos(self):

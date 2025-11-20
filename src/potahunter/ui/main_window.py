@@ -3,6 +3,7 @@ Main window for POTA Hunter application
 """
 
 import logging
+from typing import Optional
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem,
@@ -20,6 +21,7 @@ from potahunter.ui.logging_dialog import LoggingDialog, resolve_mode_for_radio
 from potahunter.ui.settings_dialog import SettingsDialog
 from potahunter.ui.logbook_viewer import LogbookViewer
 from potahunter.models.database import DatabaseManager
+from potahunter.models.qso import QSO
 from potahunter.utils.adif_export import ADIFExporter
 from potahunter.utils.adif_import import ADIFImporter
 
@@ -146,14 +148,29 @@ class MainWindow(QMainWindow):
         self.band_filter.currentTextChanged.connect(self.apply_filters)
         filter_layout.addWidget(self.band_filter)
 
-        # Mode filter
+        # Mode filter with checkboxes
         filter_layout.addWidget(QLabel("Mode:"))
-        self.mode_filter = QComboBox()
-        self.mode_filter.addItems([
-            "All Modes", "CW", "Digital", "Phone"
-        ])
-        self.mode_filter.currentTextChanged.connect(self.apply_filters)
-        filter_layout.addWidget(self.mode_filter)
+        mode_filter_widget = QWidget()
+        mode_filter_layout = QHBoxLayout(mode_filter_widget)
+        mode_filter_layout.setContentsMargins(0, 0, 0, 0)
+        mode_filter_layout.setSpacing(10)
+
+        self.mode_filter_cw = QCheckBox("CW")
+        self.mode_filter_cw.setChecked(True)
+        self.mode_filter_cw.stateChanged.connect(self.apply_filters)
+        mode_filter_layout.addWidget(self.mode_filter_cw)
+
+        self.mode_filter_digital = QCheckBox("Digital")
+        self.mode_filter_digital.setChecked(True)
+        self.mode_filter_digital.stateChanged.connect(self.apply_filters)
+        mode_filter_layout.addWidget(self.mode_filter_digital)
+
+        self.mode_filter_phone = QCheckBox("Phone")
+        self.mode_filter_phone.setChecked(True)
+        self.mode_filter_phone.stateChanged.connect(self.apply_filters)
+        mode_filter_layout.addWidget(self.mode_filter_phone)
+
+        filter_layout.addWidget(mode_filter_widget)
 
         # Park/Callsign filter
         filter_layout.addWidget(QLabel("Search:"))
@@ -249,10 +266,10 @@ class MainWindow(QMainWindow):
         spots_layout.addWidget(spots_label)
 
         self.spots_table = QTableWidget()
-        self.spots_table.setColumnCount(7)
+        self.spots_table.setColumnCount(8)
         self.spots_table.setHorizontalHeaderLabels([
             "Time", "Callsign", "Frequency", "Mode",
-            "Park", "Location", "Spotter"
+            "Park", "Location", "Grid", "Spotter"
         ])
 
         # Make table sortable
@@ -308,9 +325,9 @@ class MainWindow(QMainWindow):
 
         # Logbook table
         self.logbook_table = QTableWidget()
-        self.logbook_table.setColumnCount(13)
+        self.logbook_table.setColumnCount(14)
         self.logbook_table.setHorizontalHeaderLabels([
-            "Date", "Time", "Callsign", "Frequency", "Mode", "Band",
+            "Date", "Time", "Callsign", "Frequency", "Mode", "Band", "Power",
             "RST Sent", "RST Rcvd", "Park", "Name", "QTH", "State", "Comment"
         ])
 
@@ -331,8 +348,31 @@ class MainWindow(QMainWindow):
         self.spots_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.spots_table.setSelectionMode(QTableWidget.SingleSelection)
 
-        # Double-click to edit (opens full logbook viewer)
-        self.logbook_table.doubleClicked.connect(self.open_logbook)
+        # Ensure selection highlighting is visible with proper styling
+        self.spots_table.setStyleSheet("""
+            QTableWidget::item:selected {
+                background-color: #0078d7;
+                color: white;
+            }
+            QTableWidget::item:focus {
+                background-color: #0078d7;
+                color: white;
+            }
+        """)
+
+        self.logbook_table.setStyleSheet("""
+            QTableWidget::item:selected {
+                background-color: #0078d7;
+                color: white;
+            }
+            QTableWidget::item:focus {
+                background-color: #0078d7;
+                color: white;
+            }
+        """)
+
+        # Double-click to edit QSO
+        self.logbook_table.doubleClicked.connect(self.edit_selected_qso)
 
         logbook_layout.addWidget(self.logbook_table)
 
@@ -502,8 +542,8 @@ class MainWindow(QMainWindow):
                 # Strip QSO count if present
                 callsign_text = callsign_item.text()
                 selected_callsign = callsign_text.split(' (')[0] if ' (' in callsign_text else callsign_text
-                # Strip QSO count from park if present
-                park_text = park_item.text()
+                # Strip QSO count and park name (after newline) from park if present
+                park_text = park_item.text().split('\n')[0]  # Get first line only
                 selected_park = park_text.split(' (')[0] if ' (' in park_text else park_text
 
         self.spots_table.setSortingEnabled(False)
@@ -536,14 +576,33 @@ class MainWindow(QMainWindow):
 
             freq_item = QTableWidgetItem(spot.get('frequency', ''))
             mode_item = QTableWidgetItem(spot.get('mode', ''))
-            park_count =qso_counts.get(spot.get('reference', '').upper(), 0)
+
+            # Park column with name as second line
+            park_count = qso_counts.get(spot.get('reference', '').upper(), 0)
             if park_count > 0:
                 park_display = f"{spot.get('reference', '')} ({park_count})"
             else:
                 park_display = spot.get('reference', '')
+
+            # Add park name as second line if available
+            park_name = spot.get('name', '')
+            if park_name:
+                park_display += f"\n{park_name}"
+
             park_item = QTableWidgetItem(park_display)
             location_item = QTableWidgetItem(spot.get('locationDesc', ''))
-            spotter_item = QTableWidgetItem(spot.get('spotter', ''))
+
+            # Grid column - prefer grid6, fall back to grid4
+            grid_display = spot.get('grid6', '') or spot.get('grid4', '')
+            grid_item = QTableWidgetItem(grid_display)
+
+            # Spotter column with comments as second line
+            spotter_display = spot.get('spotter', '')
+            comments = spot.get('comments', '')
+            if comments:
+                spotter_display += f"\n{comments}"
+
+            spotter_item = QTableWidgetItem(spotter_display)
 
             # Apply color coding based on mode
             color = self.get_mode_color(mode)
@@ -555,6 +614,7 @@ class MainWindow(QMainWindow):
                 mode_item.setBackground(brush)
                 park_item.setBackground(brush)
                 location_item.setBackground(brush)
+                grid_item.setBackground(brush)
                 spotter_item.setBackground(brush)
 
             # Set items in table
@@ -564,7 +624,11 @@ class MainWindow(QMainWindow):
             self.spots_table.setItem(row, 3, mode_item)
             self.spots_table.setItem(row, 4, park_item)
             self.spots_table.setItem(row, 5, location_item)
-            self.spots_table.setItem(row, 6, spotter_item)
+            self.spots_table.setItem(row, 6, grid_item)
+            self.spots_table.setItem(row, 7, spotter_item)
+
+            # Set row height to accommodate two lines of text
+            self.spots_table.setRowHeight(row, 48)
 
         self.spots_table.setSortingEnabled(True)
         # Sort by Time column (column 0) in descending order to show newest spots first
@@ -577,13 +641,15 @@ class MainWindow(QMainWindow):
                 callsign_item = self.spots_table.item(row, 1)
                 park_item = self.spots_table.item(row, 4)
                 if callsign_item and park_item:
-                    # Strip QSO counts for comparison
+                    # Strip QSO counts and park name (after newline) for comparison
                     row_callsign = callsign_item.text().split(' (')[0] if ' (' in callsign_item.text() else callsign_item.text()
-                    row_park = park_item.text().split(' (')[0] if ' (' in park_item.text() else park_item.text()
+                    park_text = park_item.text().split('\n')[0]  # Get first line only
+                    row_park = park_text.split(' (')[0] if ' (' in park_text else park_text
 
                     if row_callsign == selected_callsign and row_park == selected_park:
-                        # Found the matching spot - select it
+                        # Found the matching spot - select it and scroll to it
                         self.spots_table.selectRow(row)
+                        self.spots_table.scrollToItem(self.spots_table.item(row, 0))
                         break
 
     def get_mode_color(self, mode: str) -> QColor:
@@ -653,7 +719,9 @@ class MainWindow(QMainWindow):
         if row < 0:
             return
 
-        park_reference = self.spots_table.item(row, 4).text()
+        park_text = self.spots_table.item(row, 4).text()
+        # Extract park reference (first line, before any count)
+        park_reference = park_text.split('\n')[0].split(' (')[0]
         if park_reference:
             url = f"https://pota.app/#/park/{park_reference}"
             self.status_bar.showMessage(f"Opening park {park_reference} in browser...", 3000)
@@ -684,11 +752,15 @@ class MainWindow(QMainWindow):
         else:
             callsign = callsign_text
 
+        # Extract park reference (first line, before any count)
+        park_text = self.spots_table.item(row, 4).text()
+        park_reference = park_text.split('\n')[0].split(' (')[0]
+
         spot_data = {
             'callsign': callsign,
             'frequency': self.spots_table.item(row, 2).text(),
             'mode': self.spots_table.item(row, 3).text(),
-            'park': self.spots_table.item(row, 4).text(),
+            'park': park_reference,
             'location': self.spots_table.item(row, 5).text(),
         }
 
@@ -873,16 +945,16 @@ class MainWindow(QMainWindow):
                 self.open_settings()
             return
 
-        # Get all QSOs from database
+        # Get unuploaded QSOs from database (for performance)
         db_manager = DatabaseManager()
-        qsos = db_manager.get_all_qsos()
+        qsos = db_manager.get_unuploaded_qsos()
 
         if not qsos:
             QMessageBox.information(
                 self,
-                "No QSOs",
-                "There are no QSOs in your logbook to upload.\n\n"
-                "Log some contacts first, then try uploading again."
+                "No QSOs to Upload",
+                "There are no unuploaded QSOs in your logbook.\n\n"
+                "All QSOs have already been uploaded to QRZ Logbook."
             )
             return
 
@@ -983,19 +1055,27 @@ class MainWindow(QMainWindow):
                 formatted_time = time_str
 
             # Populate row
-            self.logbook_table.setItem(row, 0, QTableWidgetItem(formatted_date))
-            self.logbook_table.setItem(row, 1, QTableWidgetItem(formatted_time))
-            self.logbook_table.setItem(row, 2, QTableWidgetItem(qso.callsign or ""))
+            date_item = QTableWidgetItem(formatted_date)
+            time_item = QTableWidgetItem(formatted_time)
+            callsign_item = QTableWidgetItem(qso.callsign or "")
+
+            # Store QSO ID in the first column's UserRole for easy retrieval
+            date_item.setData(Qt.UserRole, qso.id)
+
+            self.logbook_table.setItem(row, 0, date_item)
+            self.logbook_table.setItem(row, 1, time_item)
+            self.logbook_table.setItem(row, 2, callsign_item)
             self.logbook_table.setItem(row, 3, QTableWidgetItem(qso.frequency or ""))
             self.logbook_table.setItem(row, 4, QTableWidgetItem(qso.mode or ""))
             self.logbook_table.setItem(row, 5, QTableWidgetItem(qso.band or ""))
-            self.logbook_table.setItem(row, 6, QTableWidgetItem(qso.rst_sent or ""))
-            self.logbook_table.setItem(row, 7, QTableWidgetItem(qso.rst_rcvd or ""))
-            self.logbook_table.setItem(row, 8, QTableWidgetItem(qso.park_reference or ""))
-            self.logbook_table.setItem(row, 9, QTableWidgetItem(qso.name or ""))
-            self.logbook_table.setItem(row, 10, QTableWidgetItem(qso.qth or ""))
-            self.logbook_table.setItem(row, 11, QTableWidgetItem(qso.state or ""))
-            self.logbook_table.setItem(row, 12, QTableWidgetItem(qso.comment or ""))
+            self.logbook_table.setItem(row, 6, QTableWidgetItem(qso.tx_pwr or ""))
+            self.logbook_table.setItem(row, 7, QTableWidgetItem(qso.rst_sent or ""))
+            self.logbook_table.setItem(row, 8, QTableWidgetItem(qso.rst_rcvd or ""))
+            self.logbook_table.setItem(row, 9, QTableWidgetItem(qso.park_reference or ""))
+            self.logbook_table.setItem(row, 10, QTableWidgetItem(qso.name or ""))
+            self.logbook_table.setItem(row, 11, QTableWidgetItem(qso.qth or ""))
+            self.logbook_table.setItem(row, 12, QTableWidgetItem(qso.state or ""))
+            self.logbook_table.setItem(row, 13, QTableWidgetItem(qso.comment or ""))
 
         self.logbook_table.setSortingEnabled(True)
 
@@ -1032,8 +1112,9 @@ class MainWindow(QMainWindow):
             filter_text = callsign_item.text().split('(')[0].strip()
             self.filter_logbook(filter_text, "Callsign")
         elif filter_mode == "Park" and park_item:
-            filter_text = park_item.text()
-            self.filter_logbook(filter_text, "Park")
+            # Extract park reference (first line, before any count)
+            park_text = park_item.text().split('\n')[0].split(' (')[0]
+            self.filter_logbook(park_text, "Park")
 
     def open_logbook(self):
         """Open logbook viewer window"""
@@ -1041,6 +1122,170 @@ class MainWindow(QMainWindow):
         logbook_window.logbook_modified.connect(self.refresh_logbook)  # Refresh when logbook is modified
         logbook_window.show()
         self.status_bar.showMessage("Opened logbook viewer", 2000)
+
+    def edit_selected_qso(self):
+        """Open edit dialog for selected QSO from logbook table"""
+        current_row = self.logbook_table.currentRow()
+        if current_row < 0:
+            return
+
+        # Get the QSO ID from the table row (stored in UserRole of first column)
+        date_item = self.logbook_table.item(current_row, 0)
+        if not date_item:
+            return
+
+        qso_id = date_item.data(Qt.UserRole)
+        if not qso_id:
+            return
+
+        # Retrieve the QSO from database by ID
+        qso = self.db_manager.get_qso_by_id(qso_id)
+        if qso:
+
+            # Create spot_data dict from QSO for the logging dialog
+            spot_data = {
+                'callsign': qso.callsign,
+                'frequency': qso.frequency,
+                'mode': qso.mode,
+                'park': qso.park_reference or '',
+                'name': qso.name or ''
+            }
+
+            # Open logging dialog in edit mode
+            dialog = LoggingDialog(spot_data, self, self.cat_service)
+
+            # Pre-fill all the fields with existing QSO data
+            dialog.callsign_input.setText(qso.callsign or '')
+            dialog.frequency_input.setText(qso.frequency or '')
+            dialog.date_input.setText(qso.qso_date or '')
+            dialog.time_input.setText(qso.time_on or '')
+            dialog.rst_sent_input.setText(qso.rst_sent or '59')
+            dialog.rst_rcvd_input.setText(qso.rst_rcvd or '59')
+            dialog.park_input.setText(qso.park_reference or '')
+            dialog.grid_input.setText(qso.gridsquare or '')
+            dialog.name_input.setText(qso.name or '')
+            dialog.qth_input.setText(qso.qth or '')
+            dialog.state_input.setText(qso.state or '')
+            dialog.my_grid_input.setText(qso.my_gridsquare or '')
+            dialog.comment_input.setPlainText(qso.comment or '')
+
+            # Explicitly update band field from frequency
+            dialog.update_band_from_frequency()
+
+            # Set mode in combo box
+            mode_index = dialog.mode_combo.findText(qso.mode)
+            if mode_index >= 0:
+                dialog.mode_combo.setCurrentIndex(mode_index)
+            else:
+                dialog.mode_combo.setCurrentText(qso.mode or '')
+
+            # Change dialog title to indicate edit mode
+            dialog.setWindowTitle(f"Edit QSO - {qso.callsign}")
+
+            # Change button text
+            dialog.save_button.setText("Update QSO")
+
+            # Store the QSO ID so we can update instead of insert
+            dialog.editing_qso_id = qso.id
+
+            # Connect to custom save method that updates instead of inserts
+            dialog.save_button.clicked.disconnect()
+            dialog.save_button.clicked.connect(lambda: self.update_qso_from_dialog(dialog, qso.id))
+
+            if dialog.exec():
+                self.refresh_logbook()
+                self.status_bar.showMessage(f"Updated QSO with {qso.callsign}", 2000)
+
+    def update_qso_from_dialog(self, dialog, qso_id):
+        """Update an existing QSO from the logging dialog"""
+        # Validate required fields
+        if not dialog.callsign_input.text().strip():
+            QMessageBox.warning(dialog, "Invalid Input", "Callsign is required")
+            return
+
+        if not dialog.frequency_input.text().strip():
+            QMessageBox.warning(dialog, "Invalid Input", "Frequency is required")
+            return
+
+        if not dialog.mode_combo.currentText().strip():
+            QMessageBox.warning(dialog, "Invalid Input", "Mode is required")
+            return
+
+        try:
+            # Load station information from settings
+            my_callsign = self.settings.value("station/my_callsign", None)
+            operator = self.settings.value("station/operator", None)
+            my_gridsquare = dialog.my_grid_input.text().strip().upper() or self.settings.value("station/my_gridsquare", None)
+            my_city = self.settings.value("station/my_city", None)
+            my_state = self.settings.value("station/my_state", None)
+            my_county = self.settings.value("station/my_county", None)
+            my_country = self.settings.value("station/my_country", None)
+            my_dxcc = self.settings.value("station/my_dxcc", None)
+            my_lat = self.settings.value("station/my_lat", None)
+            my_lon = self.settings.value("station/my_lon", None)
+            my_postal_code = self.settings.value("station/my_postal_code", None)
+            my_street = self.settings.value("station/my_street", None)
+            my_rig = self.settings.value("station/my_rig", None)
+            ant_az = self.settings.value("station/ant_az", None)
+
+            # Get mode-specific power level from CAT settings
+            mode = dialog.mode_combo.currentText().strip().upper()
+            tx_pwr = dialog.get_power_for_mode(mode)
+
+            # Create updated QSO object
+            qso = QSO(
+                id=qso_id,
+                callsign=dialog.callsign_input.text().strip().upper(),
+                frequency=dialog.frequency_input.text().strip(),
+                mode=mode,
+                qso_date=dialog.date_input.text().strip(),
+                time_on=dialog.time_input.text().strip(),
+                rst_sent=dialog.rst_sent_input.text().strip(),
+                rst_rcvd=dialog.rst_rcvd_input.text().strip(),
+                park_reference=dialog.park_input.text().strip().upper() or None,
+                gridsquare=dialog.grid_input.text().strip().upper() or None,
+                name=dialog.name_input.text().strip() or None,
+                qth=dialog.qth_input.text().strip() or None,
+                state=dialog.state_input.text().strip().upper() or None,
+                comment=dialog.comment_input.toPlainText().strip() or None,
+                band=self._calculate_band_from_frequency(dialog.frequency_input.text().strip()),
+                sig="POTA" if dialog.park_input.text().strip() else None,
+                sig_info=dialog.park_input.text().strip().upper() or None,
+                # My station information
+                my_callsign=my_callsign,
+                operator=operator,
+                my_gridsquare=my_gridsquare,
+                my_city=my_city,
+                my_state=my_state,
+                my_county=my_county,
+                my_country=my_country,
+                my_dxcc=my_dxcc,
+                my_lat=my_lat,
+                my_lon=my_lon,
+                my_postal_code=my_postal_code,
+                my_street=my_street,
+                my_rig=my_rig,
+                tx_pwr=tx_pwr,
+                ant_az=ant_az
+            )
+
+            # Update in database
+            self.db_manager.update_qso(qso)
+
+            QMessageBox.information(
+                dialog,
+                "QSO Updated",
+                f"Contact with {qso.callsign} updated successfully!"
+            )
+
+            dialog.accept()
+
+        except Exception as e:
+            QMessageBox.critical(
+                dialog,
+                "Error",
+                f"Failed to update QSO: {str(e)}"
+            )
 
     def open_settings(self):
         """Open settings dialog"""
@@ -1081,6 +1326,9 @@ class MainWindow(QMainWindow):
             'cat_radio_model': self.settings.value("cat/radio_model", ""),
             'cat_com_port': self.settings.value("cat/com_port", ""),
             'cat_baud_rate': self.settings.value("cat/baud_rate", None, type=int),
+            'cat_power_ssb': self.settings.value("cat/power_ssb", None, type=int),
+            'cat_power_data': self.settings.value("cat/power_data", None, type=int),
+            'cat_power_cw': self.settings.value("cat/power_cw", None, type=int),
         }
         dialog.set_cat_settings(cat_settings)
 
@@ -1176,10 +1424,18 @@ class MainWindow(QMainWindow):
         if band_selection != "All Bands":
             filtered = [s for s in filtered if self.spot_matches_band(s, band_selection)]
 
-        # Mode filter
-        mode_selection = self.mode_filter.currentText()
-        if mode_selection != "All Modes":
-            filtered = [s for s in filtered if self.spot_matches_mode(s, mode_selection)]
+        # Mode filter - check which mode categories are selected
+        selected_modes = []
+        if self.mode_filter_cw.isChecked():
+            selected_modes.append("CW")
+        if self.mode_filter_digital.isChecked():
+            selected_modes.append("Digital")
+        if self.mode_filter_phone.isChecked():
+            selected_modes.append("Phone")
+
+        # Only filter if at least one mode is unchecked (not all selected)
+        if len(selected_modes) < 3:
+            filtered = [s for s in filtered if any(self.spot_matches_mode(s, mode) for mode in selected_modes)]
 
         # Search filter (park or callsign)
         search_text = self.search_filter.currentText().strip().upper()
@@ -1274,7 +1530,10 @@ class MainWindow(QMainWindow):
     def clear_filters(self):
         """Clear all filter settings"""
         self.band_filter.setCurrentIndex(0)  # "All Bands"
-        self.mode_filter.setCurrentIndex(0)  # "All Modes"
+        # Check all mode filters
+        self.mode_filter_cw.setChecked(True)
+        self.mode_filter_digital.setChecked(True)
+        self.mode_filter_phone.setChecked(True)
         self.search_filter.clearEditText()
         self.apply_filters()
 
@@ -1342,32 +1601,38 @@ class MainWindow(QMainWindow):
             if freq_item:
                 try:
                     freq_str = freq_item.text().strip()
-                    print(f"DEBUG: Raw frequency string from table: '{freq_str}'")
 
                     # Parse frequency - API returns it in kHz (e.g., "14046" for 14.046 MHz)
                     freq_khz = float(freq_str)
-                    print(f"DEBUG: Parsed as kHz: {freq_khz}")
 
                     # Convert kHz to Hz
                     freq_hz = freq_khz * 1_000
                     freq_mhz = freq_khz / 1_000
-                    print(f"DEBUG: Converted to Hz: {freq_hz} ({freq_mhz} MHz)")
 
                     # Set radio frequency
                     base_mode = self.spots_table.item(row, 3).text().strip()
                     calc_mode = resolve_mode_for_radio(base_mode, freq_mhz)
                     logging.debug(f"Tuning radio to {freq_mhz:.3f} MHz, Mode: {calc_mode}")
+
+                    # Set mode first
                     if self.cat_service.set_mode(calc_mode):
-                        print(f"DEBUG: Successfully set mode")
+
+                        # After setting mode, adjust power if configured
+                        power = self._get_power_for_mode(calc_mode)
+                        if power is not None:
+                            if self.cat_service.set_power(power):
+                                logging.debug(f"Set power to {power}W for mode {calc_mode}")
+                            else:
+                                logging.warning(f"Failed to set power to {power}W")
                     else:
-                        print(f"DEBUG: Failed to set mode")
+                        self.status_bar.showMessage(f"Failed to set mode to {calc_mode}", 5000)
+
+                    # Set frequency
                     if self.cat_service.set_frequency(freq_hz):
                         self.status_bar.showMessage(f"Tuned radio to {freq_mhz:.3f} MHz", 2000)
-                        print(f"DEBUG: Successfully tuned to {freq_mhz} MHz")
                     else:
-                        print(f"DEBUG: Failed to tune to {freq_mhz} MHz")
+                        self.status_bar.showMessage(f"Failed to tune radio to {freq_mhz:.3f} MHz", 5000)
                 except (ValueError, AttributeError) as e:
-                    print(f"DEBUG: Error tuning radio: {e}")
                     pass  # Silently ignore tuning errors
 
         # Get callsign from the table
@@ -1505,3 +1770,53 @@ class MainWindow(QMainWindow):
         is_visible = self.settings.value("view/logbook_visible", True, type=bool)
         self.logbook_widget.setVisible(is_visible)
         self.show_logbook_action.setChecked(is_visible)
+
+    def _calculate_band_from_frequency(self, frequency_str: str) -> Optional[str]:
+        """
+        Calculate band from frequency string, handling both kHz and MHz values
+
+        Args:
+            frequency_str: Frequency as string (can be kHz like "28482" or MHz like "28.482")
+
+        Returns:
+            Band string (e.g., "10m") or None if invalid
+        """
+        try:
+            freq = float(frequency_str)
+            # Convert kHz to MHz if needed (values > 1000 are likely kHz)
+            if freq > 1000:
+                freq_mhz = freq / 1000
+            else:
+                freq_mhz = freq
+
+            return QSO.frequency_to_band(str(freq_mhz))
+        except (ValueError, TypeError):
+            return None
+
+    def _get_power_for_mode(self, mode: str) -> Optional[int]:
+        """
+        Get configured power level for a given mode
+
+        Args:
+            mode: Mode string (USB, LSB, CW, FT8, etc.)
+
+        Returns:
+            Power level in watts, or None if not configured
+        """
+        mode_upper = mode.upper()
+
+        # Determine mode category
+        # SSB: USB, LSB, FM, AM (phone modes)
+        if any(m in mode_upper for m in ['USB', 'LSB', 'FM', 'AM', 'SSB']):
+            return self.settings.value("cat/power_ssb", None, type=int)
+
+        # CW modes
+        elif 'CW' in mode_upper:
+            return self.settings.value("cat/power_cw", None, type=int)
+
+        # Digital/Data modes: FT8, FT4, RTTY, PSK, DATA, etc.
+        elif any(m in mode_upper for m in ['FT8', 'FT4', 'FT', 'RTTY', 'PSK', 'DATA', 'DIGI', 'MFSK', 'JT', 'JS8']):
+            return self.settings.value("cat/power_data", None, type=int)
+
+        # Unknown mode - return None to use radio's current setting
+        return None

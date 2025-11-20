@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QSettings
 from datetime import datetime
+from typing import Optional
 
 from potahunter.models.qso import QSO
 from potahunter.models.database import DatabaseManager
@@ -106,6 +107,16 @@ class LoggingDialog(QDialog):
         self.mode_combo.addItems(self.MODES)
         self.mode_combo.setEditable(True)
         form_layout.addRow("Mode:", self.mode_combo)
+
+        # Band (auto-calculated from frequency, read-only)
+        self.band_input = QLineEdit()
+        self.band_input.setReadOnly(True)
+        self.band_input.setPlaceholderText("Auto-calculated from frequency")
+        self.band_input.setStyleSheet("background-color: #f0f0f0;")
+        form_layout.addRow("Band:", self.band_input)
+
+        # Connect frequency input to update band automatically
+        self.frequency_input.textChanged.connect(self.update_band_from_frequency)
 
         # Date and Time (auto-filled with current UTC)
         self.date_input = QLineEdit()
@@ -238,6 +249,29 @@ class LoggingDialog(QDialog):
             self.sync_freq_button.setEnabled(False)
             self.sync_freq_button.setToolTip("CAT control not connected")
 
+    def update_band_from_frequency(self):
+        """Update band field based on frequency input"""
+        frequency_text = self.frequency_input.text().strip()
+        if frequency_text:
+            try:
+                freq = float(frequency_text)
+                # Convert kHz to MHz if needed (values > 1000 are likely kHz)
+                if freq > 1000:
+                    freq_mhz = freq / 1000
+                else:
+                    freq_mhz = freq
+
+                # Calculate band from MHz value
+                band = QSO.frequency_to_band(str(freq_mhz))
+                if band:
+                    self.band_input.setText(band)
+                else:
+                    self.band_input.setText("")
+            except (ValueError, TypeError):
+                self.band_input.setText("")
+        else:
+            self.band_input.setText("")
+
     def sync_from_cat(self):
         """Sync frequency and mode from CAT control"""
         if not self.cat_service or not self.cat_service.is_connected:
@@ -266,6 +300,41 @@ class LoggingDialog(QDialog):
             else:
                 # Try to set as text (will add to combo if editable)
                 self.mode_combo.setEditText(mode_upper)
+
+    def get_power_for_mode(self, mode: str) -> Optional[str]:
+        """
+        Get the appropriate power level based on mode category
+
+        Args:
+            mode: The mode string (e.g., 'USB', 'FT8', 'CW')
+
+        Returns:
+            Power level in watts as string, or None if not configured
+        """
+        mode_upper = mode.upper()
+
+        # CW modes
+        if 'CW' in mode_upper:
+            power = self.settings.value("cat/cat_power_cw", None, type=int)
+            if power:
+                return str(power)
+
+        # Data modes
+        data_modes = ['FT8', 'FT4', 'PSK31', 'PSK', 'RTTY', 'JS8', 'DATA']
+        if any(dm in mode_upper for dm in data_modes):
+            power = self.settings.value("cat/cat_power_data", None, type=int)
+            if power:
+                return str(power)
+
+        # SSB/Voice modes (USB, LSB, FM, AM, SSB)
+        voice_modes = ['USB', 'LSB', 'FM', 'AM', 'SSB']
+        if any(vm in mode_upper for vm in voice_modes):
+            power = self.settings.value("cat/cat_power_ssb", None, type=int)
+            if power:
+                return str(power)
+
+        # Fall back to station default power if no mode-specific power is set
+        return self.settings.value("station/tx_pwr", None)
 
     def save_qso(self):
         """Validate and save the QSO"""
@@ -311,13 +380,16 @@ class LoggingDialog(QDialog):
             my_postal_code = self.settings.value("station/my_postal_code", None)
             my_street = self.settings.value("station/my_street", None)
             my_rig = self.settings.value("station/my_rig", None)
-            tx_pwr = self.settings.value("station/tx_pwr", None)
             ant_az = self.settings.value("station/ant_az", None)
+
+            # Get mode-specific power level from CAT settings
+            mode = self.mode_combo.currentText().strip().upper()
+            tx_pwr = self.get_power_for_mode(mode)
 
             qso = QSO(
                 callsign=self.callsign_input.text().strip().upper(),
                 frequency=self.frequency_input.text().strip(),
-                mode=self.mode_combo.currentText().strip().upper(),
+                mode=mode,
                 qso_date=self.date_input.text().strip(),
                 time_on=self.time_input.text().strip(),
                 rst_sent=self.rst_sent_input.text().strip(),

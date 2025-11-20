@@ -56,7 +56,6 @@ class QRZAPIService:
         if callsign_upper in self._cache:
             cached_data, cached_time = self._cache[callsign_upper]
             if datetime.now() - cached_time < self._cache_timeout:
-                logger.debug(f"Returning cached data for {callsign_upper}")
                 return cached_data
 
         try:

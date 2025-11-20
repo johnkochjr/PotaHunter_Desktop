@@ -108,6 +108,8 @@ class QRZUploadService:
             adif_fields.append(self._format_field('comment', qso.comment))
         if qso.my_gridsquare:
             adif_fields.append(self._format_field('my_gridsquare', qso.my_gridsquare))
+        if qso.tx_pwr:
+            adif_fields.append(self._format_field('tx_pwr', qso.tx_pwr))
 
         # POTA-specific fields
         if qso.sig:
@@ -134,28 +136,11 @@ class QRZUploadService:
         }
 
         # Debug output
-        print("\n" + "="*80)
-        print("QRZ UPLOAD DEBUG")
-        print("="*80)
-        print(f"QSO: {qso.callsign} on {qso.qso_date} at {qso.time_on}")
-        print(f"QSO Band: {qso.band}")
-        print(f"QSO Mode: {qso.mode}")
-        print(f"QSO Freq: {qso.frequency}")
-        print(f"\nADIF String:\n{adif_string}")
-        print(f"\nHTTP POST to: {self.BASE_URL}")
-        print(f"Parameters:")
-        print(f"  KEY: {self.api_key}")
-        print(f"  ACTION: INSERT")
-        print(f"  ADIF: {adif_string}")
-        print("="*80 + "\n")
 
         try:
             response = requests.post(self.BASE_URL, data=params, timeout=10)
 
             # Debug response
-            print(f"Response Status: {response.status_code}")
-            print(f"Response Body: {response.text}")
-            print("="*80 + "\n")
 
             # Check response
             if response.status_code == 200:

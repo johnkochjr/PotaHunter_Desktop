@@ -37,9 +37,6 @@ def main():
     )
 
     logger = logging.getLogger(__name__)
-    logger.info("=" * 60)
-    logger.info("Starting POTA Hunter application")
-    logger.info("=" * 60)
 
     # Set macOS menu bar name
     set_macos_app_name()
