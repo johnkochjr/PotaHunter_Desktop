@@ -11,8 +11,9 @@ from PySide6.QtWidgets import (
     QTextEdit, QGroupBox, QSplitter, QSizePolicy, QScrollArea, QFileDialog, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer, QUrl, QSettings, QByteArray, QThread, Signal, QCoreApplication
-from PySide6.QtGui import QAction, QColor, QBrush, QDesktopServices, QPixmap
+from PySide6.QtGui import QAction, QColor, QBrush, QDesktopServices, QPixmap, QIcon
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
+import os
 
 from potahunter.services.pota_api import PotaAPIService
 from potahunter.services.qrz_api import QRZAPIService
@@ -90,6 +91,12 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+        # Set application icon
+        icon_path = os.path.join(os.path.dirname(__file__), '..', 'resources', 'icon.ico')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         self.pota_service = PotaAPIService()
         self.qrz_service = QRZAPIService()
         self.cat_service = CATService()
