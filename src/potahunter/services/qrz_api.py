@@ -5,6 +5,7 @@ import requests
 import xml.etree.ElementTree as ET
 from typing import Optional, Dict
 import logging
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,8 @@ class QRZAPIService:
         self.username = None
         self.password = None
         self.http_session = requests.Session()
+        self._cache = {}  # Cache for callsign lookups
+        self._cache_timeout = timedelta(hours=1)  # Cache timeout
 
     def set_credentials(self, username: str, password: str):
         """
@@ -47,6 +50,14 @@ class QRZAPIService:
         if not self.has_credentials():
             logger.warning("Cannot lookup callsign: No credentials configured")
             return None
+
+        # Check cache first
+        callsign_upper = callsign.upper()
+        if callsign_upper in self._cache:
+            cached_data, cached_time = self._cache[callsign_upper]
+            if datetime.now() - cached_time < self._cache_timeout:
+                logger.debug(f"Returning cached data for {callsign_upper}")
+                return cached_data
 
         try:
             # Single request with credentials and callsign
@@ -83,9 +94,14 @@ class QRZAPIService:
             # Parse callsign data
             callsign_data = root.find(f'{namespace}Callsign')
             if callsign_data is not None:
-                return self._parse_callsign_data(callsign_data, namespace)
+                data = self._parse_callsign_data(callsign_data, namespace)
+                # Cache the result
+                self._cache[callsign_upper] = (data, datetime.now())
+                return data
 
             logger.warning(f"No callsign data found for {callsign}")
+            # Cache negative result (with None) to avoid repeated lookups
+            self._cache[callsign_upper] = (None, datetime.now())
             return None
 
         except requests.RequestException as e:

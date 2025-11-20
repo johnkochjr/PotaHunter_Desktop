@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QHeaderView, QStatusBar, QMenuBar, QMenu, QComboBox, QLabel, QCheckBox,
     QTextEdit, QGroupBox, QSplitter, QSizePolicy, QScrollArea, QFileDialog, QMessageBox
 )
-from PySide6.QtCore import Qt, QTimer, QUrl, QSettings, QByteArray
+from PySide6.QtCore import Qt, QTimer, QUrl, QSettings, QByteArray, QThread, Signal, QCoreApplication
 from PySide6.QtGui import QAction, QColor, QBrush, QDesktopServices, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
@@ -22,6 +22,35 @@ from potahunter.ui.logbook_viewer import LogbookViewer
 from potahunter.models.database import DatabaseManager
 from potahunter.utils.adif_export import ADIFExporter
 from potahunter.utils.adif_import import ADIFImporter
+
+
+class QRZLookupWorker(QThread):
+    """Worker thread for QRZ callsign lookups"""
+
+    finished = Signal(object)  # Emits the QRZ info dict or None
+
+    def __init__(self, qrz_service, callsign):
+        super().__init__()
+        self.qrz_service = qrz_service
+        self.callsign = callsign
+
+    def run(self):
+        """Perform the QRZ lookup in background thread"""
+        import time
+        try:
+            start_time = time.time()
+            info = self.qrz_service.lookup_callsign(self.callsign)
+
+            # Ensure minimum display time of 300ms for loading indicator
+            elapsed = time.time() - start_time
+            if elapsed < 0.3:
+                time.sleep(0.3 - elapsed)
+
+            self.finished.emit(info)
+        except Exception as e:
+            logging.error(f"Error in QRZ lookup thread: {e}")
+            self.finished.emit(None)
+
 
 class MainWindow(QMainWindow):
     """Main application window displaying POTA spots"""
@@ -52,6 +81,8 @@ class MainWindow(QMainWindow):
         self.network_manager = QNetworkAccessManager()
         self.network_manager.finished.connect(self.on_image_downloaded)
         self.current_qrz_info = {}  # Store current callsign's QRZ info
+        self.qrz_lookup_worker = None  # Worker thread for QRZ lookups
+        self.current_lookup_callsign = ""  # Track which callsign is being looked up
         self.load_qrz_credentials()
         self.init_ui()
         self.setup_refresh_timer()
@@ -276,6 +307,10 @@ class MainWindow(QMainWindow):
         # Allow selection of full rows
         self.logbook_table.setSelectionBehavior(QTableWidget.SelectRows)
 
+        # Enable row selection highlighting for spots table
+        self.spots_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.spots_table.setSelectionMode(QTableWidget.SingleSelection)
+
         # Double-click to edit (opens full logbook viewer)
         self.logbook_table.doubleClicked.connect(self.open_logbook)
 
@@ -290,6 +325,8 @@ class MainWindow(QMainWindow):
 
         # Details panel on the right
         details_widget = QWidget()
+        details_widget.setMinimumWidth(350)  # Set minimum width to prevent shrinking
+        details_widget.setMaximumWidth(350)  # Set maximum width to prevent growing
         details_layout = QVBoxLayout(details_widget)
         details_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -309,6 +346,8 @@ class MainWindow(QMainWindow):
         self.qsl_card_label = QLabel()
         self.qsl_card_label.setAlignment(Qt.AlignCenter)
         self.qsl_card_label.setScaledContents(False)
+        self.qsl_card_label.setMaximumHeight(400)  # Prevent vertical stretching
+        self.qsl_card_label.setMaximumWidth(300)   # Constrain width
         self.qsl_card_label.setStyleSheet("padding: 10px;")
         self.qsl_card_label.hide()  # Hidden by default
         callsign_layout.addWidget(self.qsl_card_label)
@@ -418,7 +457,12 @@ class MainWindow(QMainWindow):
 
             freq_item = QTableWidgetItem(spot.get('frequency', ''))
             mode_item = QTableWidgetItem(spot.get('mode', ''))
-            park_item = QTableWidgetItem(spot.get('reference', ''))
+            park_count =qso_counts.get(spot.get('reference', '').upper(), 0)
+            if park_count > 0:
+                park_display = f"{spot.get('reference', '')} ({park_count})"
+            else:
+                park_display = spot.get('reference', '')
+            park_item = QTableWidgetItem(park_display)
             location_item = QTableWidgetItem(spot.get('locationDesc', ''))
             spotter_item = QTableWidgetItem(spot.get('spotter', ''))
 
@@ -444,6 +488,8 @@ class MainWindow(QMainWindow):
             self.spots_table.setItem(row, 6, spotter_item)
 
         self.spots_table.setSortingEnabled(True)
+        # Sort by Time column (column 0) in descending order to show newest spots first
+        self.spots_table.sortItems(0, Qt.DescendingOrder)
 
     def get_mode_color(self, mode: str) -> QColor:
         """
@@ -515,8 +561,8 @@ class MainWindow(QMainWindow):
         park_reference = self.spots_table.item(row, 4).text()
         if park_reference:
             url = f"https://pota.app/#/park/{park_reference}"
-            QDesktopServices.openUrl(QUrl(url))
             self.status_bar.showMessage(f"Opening park {park_reference} in browser...", 3000)
+            QDesktopServices.openUrl(QUrl(url))
 
     def open_logging_dialog(self):
         """Open logging dialog with selected spot data"""
@@ -888,7 +934,7 @@ class MainWindow(QMainWindow):
         park_item = self.spots_table.item(current_row, 4)  # Park column
 
         if filter_mode == "Callsign" and callsign_item:
-            filter_text = callsign_item.text()
+            filter_text = callsign_item.text().split('(')[0].strip()
             self.filter_logbook(filter_text, "Callsign")
         elif filter_mode == "Park" and park_item:
             filter_text = park_item.text()
@@ -1000,7 +1046,7 @@ class MainWindow(QMainWindow):
             "About POTA Hunter",
             "POTA Hunter v0.1.0\n\n"
             "A Parks on the Air spotting and logging application.\n\n"
-            "Built with PySide6"
+            "Built by JK Labs (https://johnkochjr.com)\n"
         )
 
     def apply_filters(self):
@@ -1216,15 +1262,15 @@ class MainWindow(QMainWindow):
                     base_mode = self.spots_table.item(row, 3).text().strip()
                     calc_mode = resolve_mode_for_radio(base_mode, freq_mhz)
                     logging.debug(f"Tuning radio to {freq_mhz:.3f} MHz, Mode: {calc_mode}")
+                    if self.cat_service.set_mode(calc_mode):
+                        print(f"DEBUG: Successfully set mode")
+                    else:
+                        print(f"DEBUG: Failed to set mode")
                     if self.cat_service.set_frequency(freq_hz):
                         self.status_bar.showMessage(f"Tuned radio to {freq_mhz:.3f} MHz", 2000)
                         print(f"DEBUG: Successfully tuned to {freq_mhz} MHz")
                     else:
                         print(f"DEBUG: Failed to tune to {freq_mhz} MHz")
-                    if self.cat_service.set_mode(calc_mode):
-                        print(f"DEBUG: Successfully set mode")
-                    else:
-                        print(f"DEBUG: Failed to set mode")
                 except (ValueError, AttributeError) as e:
                     print(f"DEBUG: Error tuning radio: {e}")
                     pass  # Silently ignore tuning errors
@@ -1252,12 +1298,40 @@ class MainWindow(QMainWindow):
             )
             return
 
-        # Show loading message
-        self.callsign_info_label.setText(f"<i>Loading information for {callsign}...</i>")
-        self.status_bar.showMessage(f"Looking up {callsign} on QRZ...", 2000)
+        # Show loading message with spinner-like effect
+        self.callsign_info_label.setText(
+            f"<div style='text-align: center; padding: 20px;'>"
+            f"<b style='font-size: 16px;'>{callsign}</b><br><br>"
+            f"<i style='color: #666;'>Loading callsign information...</i><br>"
+            f"<span style='font-size: 24px;'>⏳</span>"
+            f"</div>"
+        )
+        self.qsl_card_label.hide()
+        self.status_bar.showMessage(f"Looking up {callsign} on QRZ...", 0)
 
-        # Lookup callsign
-        info = self.qrz_service.lookup_callsign(callsign)
+        # Force UI to update and show the loading indicator
+        QCoreApplication.processEvents()
+
+        # Cancel any existing lookup
+        if self.qrz_lookup_worker and self.qrz_lookup_worker.isRunning():
+            self.qrz_lookup_worker.finished.disconnect()
+            self.qrz_lookup_worker.quit()
+            self.qrz_lookup_worker.wait()
+
+        # Start lookup in background thread
+        self.current_lookup_callsign = callsign
+        self.qrz_lookup_worker = QRZLookupWorker(self.qrz_service, callsign)
+        self.qrz_lookup_worker.finished.connect(self.on_qrz_lookup_finished)
+        self.qrz_lookup_worker.start()
+
+    def on_qrz_lookup_finished(self, info):
+        """
+        Handle QRZ lookup completion from background thread
+
+        Args:
+            info: QRZ info dict or None
+        """
+        callsign = self.current_lookup_callsign
 
         if info:
             # Store QRZ info for use in logging dialog
@@ -1292,9 +1366,6 @@ class MainWindow(QMainWindow):
             )
             self.qsl_card_label.hide()
             self.status_bar.showMessage(f"Could not find info for {callsign}", 3000)
-
-        # Apply logbook filter if auto-filter is enabled
-        self.apply_logbook_filter_for_current_spot()
 
     def on_image_downloaded(self, reply: QNetworkReply):
         """
