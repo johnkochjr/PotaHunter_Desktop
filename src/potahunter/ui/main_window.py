@@ -114,6 +114,9 @@ class MainWindow(QMainWindow):
         # Load CAT settings after UI is initialized (so status_bar exists)
         self.load_cat_settings()
 
+        # Load logbook visibility state
+        self.load_logbook_visibility()
+
     def init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle("POTA Hunter - Spots & Logging")
@@ -271,8 +274,8 @@ class MainWindow(QMainWindow):
         left_splitter.addWidget(spots_widget)
 
         # Logbook section
-        logbook_widget = QWidget()
-        logbook_layout = QVBoxLayout(logbook_widget)
+        self.logbook_widget = QWidget()
+        logbook_layout = QVBoxLayout(self.logbook_widget)
         logbook_layout.setContentsMargins(0, 0, 0, 0)
 
         # Logbook header with filter dropdown
@@ -333,7 +336,7 @@ class MainWindow(QMainWindow):
 
         logbook_layout.addWidget(self.logbook_table)
 
-        left_splitter.addWidget(logbook_widget)
+        left_splitter.addWidget(self.logbook_widget)
 
         # Set initial sizes for vertical splitter (60% POTA spots, 40% logbook)
         left_splitter.setSizes([600, 400])
@@ -421,6 +424,15 @@ class MainWindow(QMainWindow):
         settings_action = QAction("&Settings", self)
         settings_action.triggered.connect(self.open_settings)
         tools_menu.addAction(settings_action)
+
+        # View menu
+        view_menu = menubar.addMenu("&View")
+
+        self.show_logbook_action = QAction("Show &Logbook Panel", self)
+        self.show_logbook_action.setCheckable(True)
+        self.show_logbook_action.setChecked(True)  # Default to visible
+        self.show_logbook_action.triggered.connect(self.toggle_logbook_visibility)
+        view_menu.addAction(self.show_logbook_action)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -1473,3 +1485,23 @@ class MainWindow(QMainWindow):
             self.qsl_card_label.setText(f"<i>Error loading image: {reply.errorString()}</i>")
 
         reply.deleteLater()
+
+    def toggle_logbook_visibility(self):
+        """Toggle the logbook panel visibility"""
+        is_visible = self.show_logbook_action.isChecked()
+        self.logbook_widget.setVisible(is_visible)
+
+        # Save the state to settings
+        self.settings.setValue("view/logbook_visible", is_visible)
+
+        # Update status bar
+        if is_visible:
+            self.status_bar.showMessage("Logbook panel shown", 2000)
+        else:
+            self.status_bar.showMessage("Logbook panel hidden", 2000)
+
+    def load_logbook_visibility(self):
+        """Load logbook visibility state from settings"""
+        is_visible = self.settings.value("view/logbook_visible", True, type=bool)
+        self.logbook_widget.setVisible(is_visible)
+        self.show_logbook_action.setChecked(is_visible)
