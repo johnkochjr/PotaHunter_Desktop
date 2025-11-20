@@ -24,6 +24,23 @@ from potahunter.utils.adif_export import ADIFExporter
 from potahunter.utils.adif_import import ADIFImporter
 
 
+class TimeTableWidgetItem(QTableWidgetItem):
+    """Custom QTableWidgetItem that sorts by stored timestamp instead of displayed text"""
+
+    def __lt__(self, other):
+        """Compare based on stored timestamp data rather than displayed text"""
+        # Get the stored timestamp from UserRole
+        self_time = self.data(Qt.UserRole)
+        other_time = other.data(Qt.UserRole)
+
+        # If both have timestamps, compare them
+        if self_time and other_time:
+            return self_time < other_time
+
+        # Fall back to text comparison if timestamps are missing
+        return super().__lt__(other)
+
+
 class QRZLookupWorker(QThread):
     """Worker thread for QRZ callsign lookups"""
 
@@ -429,8 +446,54 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.status_bar.showMessage(f"Error: {str(e)}", 5000)
 
+    def calculate_minutes_ago(self, spot_time_str: str) -> str:
+        """
+        Calculate how many minutes ago a spot was posted
+
+        Args:
+            spot_time_str: Spot time string (ISO format)
+
+        Returns:
+            String like "1 min ago", "10 min ago", etc.
+        """
+        try:
+            from datetime import datetime, timezone
+            # Parse ISO format timestamp (e.g., "2025-01-19T12:34:56")
+            spot_time = datetime.fromisoformat(spot_time_str.replace('Z', '+00:00'))
+
+            # If spot_time is naive (no timezone), assume it's UTC
+            if spot_time.tzinfo is None:
+                spot_time = spot_time.replace(tzinfo=timezone.utc)
+
+            # Get current time in UTC
+            now = datetime.now(timezone.utc)
+
+            # Calculate difference in minutes
+            time_diff = now - spot_time
+            minutes = max(1, int(time_diff.total_seconds() / 60))
+
+            return f"{minutes} min ago"
+        except (ValueError, AttributeError, TypeError):
+            # If parsing fails, return the original string
+            return spot_time_str
+
     def populate_spots_table(self, spots):
         """Populate the spots table with data and apply color coding"""
+        # Save currently selected spot to restore after refresh
+        selected_callsign = None
+        selected_park = None
+        current_row = self.spots_table.currentRow()
+        if current_row >= 0:
+            callsign_item = self.spots_table.item(current_row, 1)
+            park_item = self.spots_table.item(current_row, 4)
+            if callsign_item and park_item:
+                # Strip QSO count if present
+                callsign_text = callsign_item.text()
+                selected_callsign = callsign_text.split(' (')[0] if ' (' in callsign_text else callsign_text
+                # Strip QSO count from park if present
+                park_text = park_item.text()
+                selected_park = park_text.split(' (')[0] if ' (' in park_text else park_text
+
         self.spots_table.setSortingEnabled(False)
         self.spots_table.setRowCount(len(spots))
 
@@ -444,8 +507,12 @@ class MainWindow(QMainWindow):
             mode = spot.get('mode', '').upper()
             callsign = spot.get('activator', '')
 
-            # Create items
-            time_item = QTableWidgetItem(spot.get('spotTime', ''))
+            # Create items with relative time using custom item for proper sorting
+            spot_time_str = spot.get('spotTime', '')
+            relative_time = self.calculate_minutes_ago(spot_time_str)
+            time_item = TimeTableWidgetItem(relative_time)
+            # Store the original timestamp as user data for sorting
+            time_item.setData(Qt.UserRole, spot_time_str)
 
             # Add QSO count to callsign if > 0
             count = qso_counts.get(callsign.upper(), 0)
@@ -490,6 +557,22 @@ class MainWindow(QMainWindow):
         self.spots_table.setSortingEnabled(True)
         # Sort by Time column (column 0) in descending order to show newest spots first
         self.spots_table.sortItems(0, Qt.DescendingOrder)
+
+        # Restore selection if a spot was previously selected
+        if selected_callsign and selected_park:
+            # Find the row with matching callsign and park
+            for row in range(self.spots_table.rowCount()):
+                callsign_item = self.spots_table.item(row, 1)
+                park_item = self.spots_table.item(row, 4)
+                if callsign_item and park_item:
+                    # Strip QSO counts for comparison
+                    row_callsign = callsign_item.text().split(' (')[0] if ' (' in callsign_item.text() else callsign_item.text()
+                    row_park = park_item.text().split(' (')[0] if ' (' in park_item.text() else park_item.text()
+
+                    if row_callsign == selected_callsign and row_park == selected_park:
+                        # Found the matching spot - select it
+                        self.spots_table.selectRow(row)
+                        break
 
     def get_mode_color(self, mode: str) -> QColor:
         """
