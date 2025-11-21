@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 
 from potahunter.models.qso import QSO
+from potahunter.version import __version__, APP_NAME
 
 
 class ADIFExporter:
@@ -45,10 +46,12 @@ class ADIFExporter:
     def _create_header() -> str:
         """Create ADIF file header"""
         now = datetime.utcnow()
-        header = f"""ADIF Export from POTA Hunter
+        program_id_len = len(APP_NAME)
+        version_len = len(__version__)
+        header = f"""ADIF Export from {APP_NAME}
 <ADIF_VER:{len(ADIFExporter.ADIF_VERSION)}>{ADIFExporter.ADIF_VERSION}
-<PROGRAMID:11>POTA Hunter
-<PROGRAMVERSION:5>0.1.0
+<PROGRAMID:{program_id_len}>{APP_NAME}
+<PROGRAMVERSION:{version_len}>{__version__}
 <CREATED_TIMESTAMP:15>{now.strftime('%Y%m%d %H%M%S')}
 <EOH>
 

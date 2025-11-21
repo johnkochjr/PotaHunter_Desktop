@@ -25,6 +25,7 @@ from potahunter.models.database import DatabaseManager
 from potahunter.models.qso import QSO
 from potahunter.utils.adif_export import ADIFExporter
 from potahunter.utils.adif_import import ADIFImporter
+from potahunter.version import __version__, APP_NAME
 
 
 class TimeTableWidgetItem(QTableWidgetItem):
@@ -219,17 +220,17 @@ class MainWindow(QMainWindow):
 
         button_layout.addStretch()
 
-        self.logbook_button = QPushButton("View Logbook")
-        self.logbook_button.clicked.connect(self.open_logbook)
-        button_layout.addWidget(self.logbook_button)
+        # self.logbook_button = QPushButton("View Logbook")
+        # self.logbook_button.clicked.connect(self.open_logbook)
+        # button_layout.addWidget(self.logbook_button)
 
-        self.export_button = QPushButton("Export Log (ADIF)")
-        self.export_button.clicked.connect(self.export_log)
-        button_layout.addWidget(self.export_button)
+        # self.export_button = QPushButton("Export Log (ADIF)")
+        # self.export_button.clicked.connect(self.export_log)
+        # button_layout.addWidget(self.export_button)
 
-        self.upload_button = QPushButton("Upload to QRZ Logbook")
-        self.upload_button.clicked.connect(self.upload_log)
-        button_layout.addWidget(self.upload_button)
+        # self.upload_button = QPushButton("Upload to QRZ Logbook")
+        # self.upload_button.clicked.connect(self.upload_log)
+        # button_layout.addWidget(self.upload_button)
 
         layout.addLayout(button_layout)
 
@@ -445,6 +446,10 @@ class MainWindow(QMainWindow):
         logbook_action.triggered.connect(self.open_logbook)
         file_menu.addAction(logbook_action)
 
+        upload_action = QAction("&Upload to QRZ Logbook", self)
+        upload_action.triggered.connect(self.upload_log)
+        file_menu.addAction(upload_action)
+
         file_menu.addSeparator()
 
         import_action = QAction("&Import ADIF File", self)
@@ -464,9 +469,7 @@ class MainWindow(QMainWindow):
         # Tools menu
         tools_menu = menubar.addMenu("&Tools")
 
-        upload_action = QAction("&Upload to QRZ Logbook", self)
-        upload_action.triggered.connect(self.upload_log)
-        tools_menu.addAction(upload_action)
+        
 
         settings_action = QAction("&Settings", self)
         settings_action.triggered.connect(self.open_settings)
@@ -481,6 +484,9 @@ class MainWindow(QMainWindow):
         self.show_logbook_action.triggered.connect(self.toggle_logbook_visibility)
         view_menu.addAction(self.show_logbook_action)
 
+        self.show_logbook_view = QAction("&View Logbook", self)
+        self.show_logbook_view.triggered.connect(self.open_logbook)
+        view_menu.addAction(self.show_logbook_view)
         # Help menu
         help_menu = menubar.addMenu("&Help")
 
@@ -771,14 +777,32 @@ class MainWindow(QMainWindow):
             'location': self.spots_table.item(row, 5).text(),
         }
 
-        # Add name from QRZ lookup if available
+        # Add name from QRZ lookup - check if we already have it, otherwise do a quick lookup
         callsign = spot_data['callsign']
+        qrz_name = None
+
+        # First check if current QRZ info matches this callsign
         if self.current_qrz_info and self.current_qrz_info.get('callsign', '').upper() == callsign.upper():
-            # Get first name and last name from QRZ info
             first_name = self.current_qrz_info.get('first_name', '')
             last_name = self.current_qrz_info.get('last_name', '')
             if first_name or last_name:
-                spot_data['name'] = f"{first_name} {last_name}".strip()
+                qrz_name = f"{first_name} {last_name}".strip()
+
+        # If we don't have the name yet and QRZ is configured, do a quick synchronous lookup
+        if not qrz_name and self.qrz_service.has_credentials():
+            try:
+                qrz_info = self.qrz_service.lookup_callsign(callsign)
+                if qrz_info:
+                    first_name = qrz_info.get('first_name', '')
+                    last_name = qrz_info.get('last_name', '')
+                    if first_name or last_name:
+                        qrz_name = f"{first_name} {last_name}".strip()
+            except Exception:
+                pass  # Silently ignore QRZ lookup errors
+
+        # Add name to spot data if we got it
+        if qrz_name:
+            spot_data['name'] = qrz_name
 
         dialog = LoggingDialog(spot_data, self, self.cat_service)
         if dialog.exec():
@@ -1393,8 +1417,8 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QMessageBox
         QMessageBox.about(
             self,
-            "About POTA Hunter",
-            "POTA Hunter v0.1.0\n\n"
+            f"About {APP_NAME}",
+            f"{APP_NAME} v{__version__}\n\n"
             "A Parks on the Air spotting and logging application.\n\n"
             "Built by JK Labs (https://johnkochjr.com)\n"
         )

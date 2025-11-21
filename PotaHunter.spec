@@ -11,11 +11,18 @@ block_cipher = None
 # Collect all PySide6 plugins
 pyside6_datas = collect_data_files('PySide6')
 
+# Include resources directory if it exists
+import os
+resources_path = os.path.join('src', 'potahunter', 'resources')
+additional_datas = []
+if os.path.exists(resources_path):
+    additional_datas.append((resources_path, 'potahunter/resources'))
+
 a = Analysis(
     ['run.py'],
-    pathex=[],
+    pathex=['src'],  # Add src directory to Python path
     binaries=[],
-    datas=pyside6_datas,
+    datas=pyside6_datas + additional_datas,
     hiddenimports=[
         'PySide6.QtCore',
         'PySide6.QtGui',
@@ -60,7 +67,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Add icon path here if you have one: 'icon.icns' for macOS or 'icon.ico' for Windows
+    icon='src/potahunter/resources/icon.ico',  # Windows icon (will be ignored if file doesn't exist)
 )
 
 coll = COLLECT(
@@ -76,16 +83,20 @@ coll = COLLECT(
 
 # macOS app bundle
 if sys.platform == 'darwin':
+    # Import version info
+    sys.path.insert(0, 'src')
+    from potahunter.version import __version__, APP_NAME, APP_DISPLAY_NAME, APP_BUNDLE_ID
+
     app = BUNDLE(
         coll,
         name='PotaHunter.app',
-        icon=None,  # Add 'icon.icns' if you have one
-        bundle_identifier='com.potahunter.app',
+        icon='src/potahunter/resources/icon.icns',  # macOS icon (will be ignored if file doesn't exist)
+        bundle_identifier=APP_BUNDLE_ID,
         info_plist={
-            'CFBundleName': 'POTA Hunter',
-            'CFBundleDisplayName': 'POTA Hunter',
-            'CFBundleVersion': '1.0.0',
-            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleName': APP_NAME,
+            'CFBundleDisplayName': APP_DISPLAY_NAME,
+            'CFBundleVersion': __version__,
+            'CFBundleShortVersionString': __version__,
             'NSHighResolutionCapable': True,
             'LSMinimumSystemVersion': '10.13.0',
         },
