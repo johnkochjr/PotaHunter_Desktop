@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QStatusBar, QMenuBar, QMenu, QComboBox, QLabel, QCheckBox,
-    QTextEdit, QGroupBox, QSplitter, QSizePolicy, QScrollArea, QFileDialog, QMessageBox
+    QTextEdit, QGroupBox, QSplitter, QFileDialog, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer, QUrl, QSettings, QByteArray, QThread, Signal, QCoreApplication
 from PySide6.QtGui import QAction, QColor, QBrush, QDesktopServices, QPixmap, QIcon
@@ -139,11 +139,14 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # Main layout
+        # Main layout with minimal margins
         layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(5, 5, 5, 5)  # Reduce margins
+        layout.setSpacing(5)  # Reduce spacing between widgets
 
         # Filter section
         filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(5)  # Reduce spacing
         filter_layout.addWidget(QLabel("Filters:"))
 
         # Band filter
@@ -196,8 +199,12 @@ class MainWindow(QMainWindow):
         filter_layout.addStretch()
         layout.addLayout(filter_layout)
 
-        # Control buttons
-        button_layout = QHBoxLayout()
+        # Control buttons wrapped in a widget with constrained height
+        button_widget = QWidget()
+        button_widget.setMaximumHeight(40)
+        button_layout = QHBoxLayout(button_widget)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(5)
 
         self.refresh_button = QPushButton("Refresh Spots")
         self.refresh_button.clicked.connect(self.refresh_spots)
@@ -232,31 +239,7 @@ class MainWindow(QMainWindow):
         # self.upload_button.clicked.connect(self.upload_log)
         # button_layout.addWidget(self.upload_button)
 
-        layout.addLayout(button_layout)
-
-        # Color legend
-        legend_layout = QHBoxLayout()
-        legend_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
-        legend_layout.setSpacing(10)  # Adjust spacing between items
-        legend_layout.addWidget(QLabel("Mode Colors:"))
-
-        cw_label = QLabel(" CW ")
-        cw_label.setStyleSheet("background-color: rgb(173, 216, 230); padding: 2px 8px; border-radius: 3px;")
-        cw_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed) 
-        legend_layout.addWidget(cw_label)
-
-        digital_label = QLabel(" Digital ")
-        digital_label.setStyleSheet("background-color: rgb(144, 238, 144); padding: 2px 8px; border-radius: 3px;")
-        digital_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        legend_layout.addWidget(digital_label)
-
-        phone_label = QLabel(" Phone ")
-        phone_label.setStyleSheet("background-color: rgb(255, 222, 173); padding: 2px 8px; border-radius: 3px;")
-        phone_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        legend_layout.addWidget(phone_label)
-
-        legend_layout.addStretch()
-        layout.addLayout(legend_layout)
+        layout.addWidget(button_widget)
 
         # Create main horizontal splitter for POTA spots/logbook and details panel
         main_splitter = QSplitter(Qt.Horizontal)
