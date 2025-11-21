@@ -52,7 +52,8 @@ class QRZUploadService:
 
         # Build ADIF string for the QSO
         adif_fields = []
-
+        if qso.comment == "None" or qso.comment is None :
+            qso.comment = ""
         # Calculate band from frequency if not set
         if not qso.band and qso.frequency:
             from potahunter.models.qso import QSO as QSOModel
@@ -66,7 +67,7 @@ class QRZUploadService:
             except (ValueError, TypeError):
                 pass
             qso.band = QSOModel.frequency_to_band(freq_str)
-
+        logger = logging.getLogger(__name__)
         # Required fields
         if qso.band:
             adif_fields.append(self._format_field('band', qso.band.upper()))
@@ -105,7 +106,8 @@ class QRZUploadService:
             adif_fields.append(self._format_field('state', qso.state))
         if qso.country:
             adif_fields.append(self._format_field('country', qso.country))
-        if qso.comment:
+        logger.debug(f"QRZ Upload - QSO Reference: {qso.park_reference}; Comment: {qso.comment}")
+        if qso.comment or qso.park_reference:
             if qso.park_reference:
                 comment_text = f"{qso.comment}\n{qso.park_reference}"
             else:
@@ -140,7 +142,7 @@ class QRZUploadService:
         }
 
         # Debug output
-        logger = logging.getLogger(__name__)
+        
         logger.debug(f"QRZ Upload - Callsign: {qso.callsign}")
         logger.debug(f"QRZ Upload - ADIF String: {adif_string}")
         logger.debug(f"QRZ Upload - Full Request Params (KEY redacted): ACTION={params['ACTION']}, ADIF={adif_string}")

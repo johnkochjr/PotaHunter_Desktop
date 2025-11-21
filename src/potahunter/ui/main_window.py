@@ -241,11 +241,11 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(button_widget)
 
-        # Create main horizontal splitter for POTA spots/logbook and details panel
-        main_splitter = QSplitter(Qt.Horizontal)
+        # Create main vertical splitter - top section and logbook
+        main_splitter = QSplitter(Qt.Vertical)
 
-        # Create left side vertical splitter for POTA spots and logbook
-        left_splitter = QSplitter(Qt.Vertical)
+        # Create top horizontal splitter for POTA spots and details panel
+        top_splitter = QSplitter(Qt.Horizontal)
 
         # POTA Spots table section
         spots_widget = QWidget()
@@ -279,7 +279,7 @@ class MainWindow(QMainWindow):
         self.spots_table.currentItemChanged.connect(self.on_row_selection_changed)
 
         spots_layout.addWidget(self.spots_table)
-        left_splitter.addWidget(spots_widget)
+        top_splitter.addWidget(spots_widget)
 
         # Logbook section
         self.logbook_widget = QWidget()
@@ -367,14 +367,7 @@ class MainWindow(QMainWindow):
 
         logbook_layout.addWidget(self.logbook_table)
 
-        left_splitter.addWidget(self.logbook_widget)
-
-        # Set initial sizes for vertical splitter (60% POTA spots, 40% logbook)
-        left_splitter.setSizes([600, 400])
-
-        main_splitter.addWidget(left_splitter)
-
-        # Details panel on the right
+        # Details panel on the right of spots
         details_widget = QWidget()
         details_widget.setMinimumWidth(350)  # Set minimum width to prevent shrinking
         details_widget.setMaximumWidth(350)  # Set maximum width to prevent growing
@@ -406,10 +399,17 @@ class MainWindow(QMainWindow):
         details_layout.addWidget(callsign_group)
         details_layout.addStretch()
 
-        main_splitter.addWidget(details_widget)
+        top_splitter.addWidget(details_widget)
 
-        # Set initial splitter sizes (70% table, 30% details)
-        main_splitter.setSizes([700, 300])
+        # Set initial splitter sizes for top horizontal splitter (70% spots, 30% details)
+        top_splitter.setSizes([700, 300])
+
+        # Add top splitter and logbook to main vertical splitter
+        main_splitter.addWidget(top_splitter)
+        main_splitter.addWidget(self.logbook_widget)
+
+        # Set initial sizes for vertical splitter (60% top section, 40% logbook)
+        main_splitter.setSizes([600, 400])
 
         layout.addWidget(main_splitter)
 
