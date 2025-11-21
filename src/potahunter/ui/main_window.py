@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QGroupBox, QSplitter, QFileDialog, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer, QUrl, QSettings, QByteArray, QThread, Signal, QCoreApplication
-from PySide6.QtGui import QAction, QColor, QBrush, QDesktopServices, QPixmap, QIcon
+from PySide6.QtGui import QAction, QColor, QBrush, QDesktopServices, QPixmap, QIcon, QFont
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 import os
 
@@ -527,6 +527,9 @@ class MainWindow(QMainWindow):
 
     def populate_spots_table(self, spots):
         """Populate the spots table with data and apply color coding"""
+        # Store current spots for refresh after QSO save
+        self.current_spots = spots
+
         # Save currently selected spot to restore after refresh
         selected_callsign = None
         selected_park = None
@@ -551,6 +554,9 @@ class MainWindow(QMainWindow):
         # Get QSO counts for all callsigns in one efficient query
         qso_counts = self.db_manager.get_callsign_qso_counts(callsigns)
 
+        # Check which spots have been logged (callsign + date + park + band)
+        logged_spots = self.db_manager.check_spots_logged(spots)
+
         for row, spot in enumerate(spots):
             mode = spot.get('mode', '').upper()
             callsign = spot.get('activator', '')
@@ -558,6 +564,11 @@ class MainWindow(QMainWindow):
             # Create items with relative time using custom item for proper sorting
             spot_time_str = spot.get('spotTime', '')
             relative_time = self.calculate_minutes_ago(spot_time_str)
+
+            # Add checkmark if this spot has been logged
+            if logged_spots.get(row, False):
+                relative_time = f"✓ {relative_time}"
+
             time_item = TimeTableWidgetItem(relative_time)
             # Store the original timestamp as user data for sorting
             time_item.setData(Qt.UserRole, spot_time_str)
@@ -599,6 +610,19 @@ class MainWindow(QMainWindow):
                 spotter_display += f"\n{comments}"
 
             spotter_item = QTableWidgetItem(spotter_display)
+
+            # Apply bold font to logged spots
+            if logged_spots.get(row, False):
+                bold_font = QFont()
+                bold_font.setBold(True)
+                time_item.setFont(bold_font)
+                callsign_item.setFont(bold_font)
+                freq_item.setFont(bold_font)
+                mode_item.setFont(bold_font)
+                park_item.setFont(bold_font)
+                location_item.setFont(bold_font)
+                grid_item.setFont(bold_font)
+                spotter_item.setFont(bold_font)
 
             # Apply color coding based on mode
             color = self.get_mode_color(mode)
@@ -791,6 +815,9 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             # Refresh logbook after saving a QSO
             self.refresh_logbook()
+            # Refresh spots to update logged indicators
+            if hasattr(self, 'all_spots'):
+                self.apply_filters()
 
     def import_adif(self):
         """Import QSOs from an ADIF file"""
@@ -1697,6 +1724,9 @@ class MainWindow(QMainWindow):
         self.qrz_lookup_worker = QRZLookupWorker(self.qrz_service, callsign)
         self.qrz_lookup_worker.finished.connect(self.on_qrz_lookup_finished)
         self.qrz_lookup_worker.start()
+
+        # Apply logbook filter for the selected spot
+        self.apply_logbook_filter_for_current_spot()
 
     def on_qrz_lookup_finished(self, info):
         """

@@ -3,6 +3,7 @@ QRZ Logbook API upload service
 """
 
 import requests
+import logging
 from typing import List, Optional, Dict
 from datetime import datetime
 
@@ -105,7 +106,11 @@ class QRZUploadService:
         if qso.country:
             adif_fields.append(self._format_field('country', qso.country))
         if qso.comment:
-            adif_fields.append(self._format_field('comment', qso.comment))
+            if qso.park_reference:
+                comment_text = f"{qso.comment}\n{qso.park_reference}"
+            else:
+                comment_text = qso.comment
+            adif_fields.append(self._format_field('comment', comment_text))
         if qso.my_gridsquare:
             adif_fields.append(self._format_field('my_gridsquare', qso.my_gridsquare))
         if qso.tx_pwr:
@@ -127,7 +132,6 @@ class QRZUploadService:
 
         # Build the ADIF string
         adif_string = ''.join(adif_fields) + '<eor>'
-
         # Build the request
         params = {
             'KEY': self.api_key,
@@ -136,11 +140,17 @@ class QRZUploadService:
         }
 
         # Debug output
+        logger = logging.getLogger(__name__)
+        logger.debug(f"QRZ Upload - Callsign: {qso.callsign}")
+        logger.debug(f"QRZ Upload - ADIF String: {adif_string}")
+        logger.debug(f"QRZ Upload - Full Request Params (KEY redacted): ACTION={params['ACTION']}, ADIF={adif_string}")
 
         try:
             response = requests.post(self.BASE_URL, data=params, timeout=10)
 
             # Debug response
+            logger.debug(f"QRZ Upload - Response Status: {response.status_code}")
+            logger.debug(f"QRZ Upload - Response Text: {response.text.strip()}")
 
             # Check response
             if response.status_code == 200:

@@ -214,7 +214,41 @@ class DatabaseManager:
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-
+        if qso.band is None and qso.frequency:
+            # Derive band from frequency if not set
+            try:
+                freq_mhz = float(qso.frequency) / 1000
+                if freq_mhz < 2:
+                    qso.band = '160m'
+                elif freq_mhz < 4:
+                    qso.band = '80m'
+                elif freq_mhz < 6:
+                    qso.band = '60m'
+                elif freq_mhz < 8:
+                    qso.band = '40m'
+                elif freq_mhz < 11:
+                    qso.band = '30m'
+                elif freq_mhz < 15:
+                    qso.band = '20m'
+                elif freq_mhz < 19:
+                    qso.band = '17m'
+                elif freq_mhz < 22:
+                    qso.band = '15m'
+                elif freq_mhz < 25:
+                    qso.band = '12m'
+                elif freq_mhz < 30:
+                    qso.band = '10m'
+                elif freq_mhz < 55:
+                    qso.band = '6m'
+                elif freq_mhz < 150:
+                    qso.band = '2m'
+                elif freq_mhz < 450:
+                    qso.band = '70cm'
+                else:
+                    qso.band = ''
+            except ValueError:
+                qso.band = ''
+                
         cursor.execute('''
             INSERT INTO qsos (
                 callsign, frequency, mode, qso_date, time_on, time_off,
@@ -546,6 +580,106 @@ class DatabaseManager:
         counts = {callsign.upper(): count for callsign, count in results}
 
         return counts
+
+    def check_spots_logged(self, spots: List[dict]) -> dict:
+        """
+        Check which spots have been logged based on callsign, date, park, and band
+
+        Args:
+            spots: List of spot dictionaries with keys: activator, reference, frequency, spotTime
+
+        Returns:
+            Dictionary mapping spot index to boolean (True if logged)
+        """
+        if not spots:
+            return {}
+
+        import logging
+        logger = logging.getLogger(__name__)
+
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        logged_spots = {}
+
+        # Import datetime for parsing spot times
+        from datetime import datetime
+
+        for idx, spot in enumerate(spots):
+            callsign = spot.get('activator', '').upper()
+            park = spot.get('reference', '').upper()
+            frequency = spot.get('frequency', '')
+            spot_time_str = spot.get('spotTime', '')
+
+            if not callsign or not park or not frequency:
+                logged_spots[idx] = False
+                continue
+            # Extract UTC date from spot time (ISO format like "2025-01-19T12:34:56")
+            try:
+                if spot_time_str:
+                    # Parse ISO format timestamp
+                    spot_time = datetime.fromisoformat(spot_time_str.replace('Z', '+00:00'))
+                    spot_date = spot_time.strftime('%Y%m%d')
+                else:
+                    # Fallback to current UTC date if no spot time
+                    spot_date = datetime.utcnow().strftime('%Y%m%d')
+            except (ValueError, AttributeError):
+                # If parsing fails, use current UTC date
+                spot_date = datetime.utcnow().strftime('%Y%m%d')
+
+            # Convert frequency to band
+            try:
+                freq_mhz = float(frequency) / 1000
+                if freq_mhz < 2:
+                    band = '160m'
+                elif freq_mhz < 4:
+                    band = '80m'
+                elif freq_mhz < 6:
+                    band = '60m'
+                elif freq_mhz < 8:
+                    band = '40m'
+                elif freq_mhz < 11:
+                    band = '30m'
+                elif freq_mhz < 15:
+                    band = '20m'
+                elif freq_mhz < 19:
+                    band = '17m'
+                elif freq_mhz < 22:
+                    band = '15m'
+                elif freq_mhz < 25:
+                    band = '12m'
+                elif freq_mhz < 30:
+                    band = '10m'
+                elif freq_mhz < 55:
+                    band = '6m'
+                elif freq_mhz < 150:
+                    band = '2m'
+                elif freq_mhz < 450:
+                    band = '70cm'
+                else:
+                    band = ''
+            except ValueError:
+                band = ''
+            
+            # Query for matching QSO
+            cursor.execute('''
+                SELECT COUNT(*) FROM qsos
+                WHERE UPPER(callsign) = ?
+                AND qso_date = ?
+                AND UPPER(park_reference) = ?
+                AND band = ?
+            ''', (callsign, spot_date, park, band))
+
+            count = cursor.fetchone()[0]
+            logged_spots[idx] = count > 0
+            if callsign == "KB0TTL":
+                logger.debug(f"Checking spot {idx}: callsign={callsign}, park={park}, date={spot_date}, band={band} => logged={logged_spots[idx]}")
+            # Debug logging for matches
+            if count > 0:
+                logger.debug(f"MATCH FOUND: {callsign} at {park} on {spot_date} band {band} (count={count})")
+
+        conn.close()
+        return logged_spots
 
     @staticmethod
     def _row_to_qso(row: sqlite3.Row) -> QSO:
